@@ -1,0 +1,6 @@
+User-agent: *
+Allow: /
+Disallow: /admin
+Disallow: /admin/*
+Sitemap: https://formation.biteckethan.com/sitemap.xml
+Host: formation.biteckethan.com
