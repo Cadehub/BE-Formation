@@ -29,14 +29,6 @@ export function StudentDashboard() {
 
   useEffect(() => {
     async function load() {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session?.user) {
-        navigate('/student/login', { replace: true });
-        return;
-      }
-
-      setUserId(session.user.id);
-      const token = session.access_token;
       // Use Supabase client directly instead of the server endpoint
       const { data: { session } } = await supabase.auth.getSession();
       if (!session?.user) {
