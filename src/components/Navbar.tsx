@@ -3,6 +3,7 @@ import { useTheme } from 'next-themes';
 import { Moon, Sun, Menu, X, Fingerprint } from 'lucide-react';
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
+import { supabase } from '../lib/supabase';
 
 export function Navbar() {
   const { theme, setTheme } = useTheme();
@@ -21,13 +22,16 @@ export function Navbar() {
   useEffect(() => {
     async function fetchMenuState() {
       try {
-        const response = await fetch('/api/public/menu');
-        if (!response.ok) return;
-        const payload = await response.json();
-        setHasStudents(Boolean(payload.hasStudents));
-        setHasBlog(Boolean(payload.hasBlog));
-      } catch {
-        // Keep defaults false to avoid flashing unavailable links
+        const [{ count: studentsCount }, { count: blogCount }] = await Promise.all([
+          supabase.from('profiles').select('id', { count: 'exact', head: true }).eq('is_attested', true),
+          supabase.from('blogs').select('id', { count: 'exact', head: true }).eq('is_published', true),
+        ]);
+
+        setHasStudents(Boolean(studentsCount && studentsCount > 0));
+        setHasBlog(Boolean(blogCount && blogCount > 0));
+      } catch (err) {
+        // keep defaults
+        console.error('Failed to load menu state', err);
       }
     }
 
@@ -71,8 +75,8 @@ export function Navbar() {
 
   return (
     <>
-      <nav className="fixed top-6 left-1/2 -translate-x-1/2 z-50 w-[calc(100%-3rem)] md:w-auto md:min-w-[700px] glass backdrop-blur-2xl border border-[var(--border)] rounded-full shadow-2xl transition-all duration-300">
-        <div className="px-6 py-4">
+      <nav className="fixed top-6 left-0 right-0 z-50 mx-auto w-full max-w-[calc(100%-3rem)] md:w-auto md:min-w-[700px] glass backdrop-blur-2xl border border-[var(--border)] rounded-full shadow-2xl transition-all duration-300 px-4">
+        <div className="py-4">
           <div className="flex justify-between items-center">
             
             <a href="/" onClick={handleLogoClick} className="flex items-center space-x-3 group mr-8 cursor-pointer">

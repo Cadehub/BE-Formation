@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { MessageCircle } from 'lucide-react';
+import { supabase } from '../lib/supabase';
 
 export function FloatingWhatsApp() {
   const [whatsappNumber, setWhatsappNumber] = useState<string | null>(null);
@@ -10,11 +11,8 @@ export function FloatingWhatsApp() {
   useEffect(() => {
     async function fetchWhatsAppNumber() {
       try {
-        const response = await fetch('/api/public/settings/whatsapp');
-        if (response.ok) {
-          const data = await response.json();
-          setWhatsappNumber(data.whatsapp_number);
-        }
+        const { data, error } = await supabase.from('platform_settings').select('whatsapp_number').eq('id', 1).single();
+        if (!error && data) setWhatsappNumber(data.whatsapp_number || null);
       } catch (err) {
         console.error('Failed to fetch WhatsApp number:', err);
       } finally {

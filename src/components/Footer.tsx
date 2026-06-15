@@ -1,6 +1,7 @@
 import { Phone, Mail, Globe, Facebook, Github, Linkedin } from 'lucide-react';
 import { useLocation } from 'react-router-dom';
 import { useEffect, useState } from 'react';
+import { supabase } from '../lib/supabase';
 
 interface PlatformSettings {
   whatsapp_number?: string;
@@ -21,11 +22,8 @@ export function Footer() {
   useEffect(() => {
     async function fetchSettings() {
       try {
-        const response = await fetch('/api/public/settings');
-        if (response.ok) {
-          const data = await response.json();
-          setSettings(data);
-        }
+        const { data, error } = await supabase.from('platform_settings').select('*').eq('id', 1).single();
+        if (!error && data) setSettings(data as PlatformSettings);
       } catch (err) {
         console.error('Failed to fetch platform settings:', err);
       } finally {

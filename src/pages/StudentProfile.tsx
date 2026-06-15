@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { SEO } from '../components/SEO';
 import { Profile } from '../types';
+import { supabase } from '../lib/supabase';
 
 const socialIcons: Record<string, React.ComponentType<{ className?: string }>> = {
   linkedin: Linkedin,
@@ -43,14 +44,9 @@ export function StudentProfile() {
       }
 
       try {
-        const response = await fetch(`/api/public/profiles/${encodeURIComponent(student_id)}`);
-        if (!response.ok) {
-          const body = await response.json().catch(() => ({}));
-          throw new Error(body?.error || 'Profil introuvable');
-        }
-
-        const payload = await response.json();
-        setProfile(payload.profile || null);
+        const { data, error } = await supabase.from('profiles').select('*').eq('student_id', student_id).maybeSingle();
+        if (error) throw error;
+        setProfile(data || null);
       } catch (err: any) {
         setError(err.message || 'Erreur lors du chargement du profil.');
       } finally {
