@@ -75,7 +75,7 @@ export function Navbar() {
 
   return (
     <>
-      <nav className="fixed top-6 left-0 right-0 z-50 mx-auto w-full max-w-[calc(100%-3rem)] md:w-auto md:min-w-[700px] glass backdrop-blur-2xl border border-[var(--border)] rounded-full shadow-2xl transition-all duration-300 px-4">
+      <nav className="fixed top-6 left-0 right-0 z-50 mx-auto w-full max-w-[calc(100%-3rem)] md:w-auto md:min-w-[700px] glass backdrop-blur-2xl border border-[var(--border)] rounded-full shadow-2xl transition-all duration-300 px-4 pr-6">
         <div className="py-4">
           <div className="flex justify-between items-center">
             
@@ -102,7 +102,7 @@ export function Navbar() {
               <Link to="/student/login" className="text-sm font-medium opacity-70 hover:opacity-100 hover:text-[var(--accent)] transition-all">Espace Étudiant</Link>
             </div>
 
-            <div className="flex items-center space-x-4 ml-8">
+            <div className="flex items-center gap-2 ml-6 pr-4">
               {mounted && (
                 <button 
                   onClick={toggleTheme} 
