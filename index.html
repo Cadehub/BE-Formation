@@ -3,11 +3,102 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Biteck Ethan Formation</title>
+    <title>C&B Services — Formations professionnelles &amp; Tech à Douala | Full‑stack Training</title>
+    <meta name="description" content="C&B Services propose des formations intensives en développement web, data et marketing digital à Douala. Parcours pratiques, certification et accompagnement professionnel. Développé par [VOTRE NOM], Full‑stack developer.">
+    <link rel="canonical" href="https://formation.biteckethan.com/">
     <link rel="icon" href="/icon.svg" type="image/svg+xml" />
     <link rel="apple-touch-icon" href="/icon.svg" />
     <link rel="mask-icon" href="/icon.svg" color="#000000" />
     <link rel="manifest" href="/manifest.webmanifest" />
+
+    <!-- Open Graph -->
+    <meta property="og:type" content="website">
+    <meta property="og:site_name" content="C&B Services Formations">
+    <meta property="og:title" content="C&B Services — Formations professionnelles &amp; Tech à Douala">
+    <meta property="og:description" content="Formations intensives (Web, Data, Marketing Digital) avec projets réels et certification. Inscrivez-vous dès aujourd'hui.">
+    <meta property="og:url" content="https://formation.biteckethan.com/">
+    <meta property="og:image" content="https://formation.biteckethan.com/icon.svg">
+
+    <!-- Twitter Card -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:site" content="@CBServices">
+    <meta name="twitter:creator" content="@VotreHandle">
+    <meta name="twitter:title" content="C&B Services — Formations professionnelles &amp; Tech à Douala">
+    <meta name="twitter:description" content="Parcours pratiques, certifications et accompagnement pro. Développé par [VOTRE NOM], Full‑stack developer.">
+    <meta name="twitter:image" content="https://formation.biteckethan.com/icon.svg">
+
+    <meta name="theme-color" content="#0a0a0a">
+    <meta name="robots" content="index,follow">
+
+    <!-- JSON-LD structured data (Organization, Courses, Person/Developer) -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@graph": [
+        {
+          "@type": "Organization",
+          "@id": "https://formation.biteckethan.com/#organization",
+          "name": "C&B Services",
+          "url": "https://formation.biteckethan.com/",
+          "logo": "https://formation.biteckethan.com/icon.svg",
+          "sameAs": [
+            "https://facebook.com/CBServices",
+            "https://linkedin.com/company/cb-services"
+          ],
+          "contactPoint": [
+            {
+              "@type": "ContactPoint",
+              "contactType": "customer support",
+              "telephone": "+237600000000",
+              "availableLanguage": ["fr","en"]
+            }
+          ],
+          "description": "C&B Services propose des formations intensives en développement web, data et marketing digital à Douala."
+        },
+        {
+          "@type": "ItemList",
+          "@id": "https://formation.biteckethan.com/#courses",
+          "name": "Catalogue de Formations - C&B Services",
+          "itemListElement": [
+            {
+              "@type": "ListItem",
+              "position": 1,
+              "item": {
+                "@type": "Course",
+                "name": "Développement Web Full‑stack (React + Node)",
+                "description": "Bootcamp pratique sur React, TypeScript, Node.js et déploiement. Projets réels et coaching.",
+                "provider": { "@id": "https://formation.biteckethan.com/#organization" },
+                "url": "https://formation.biteckethan.com/formations/developpement-web-fullstack"
+              }
+            },
+            {
+              "@type": "ListItem",
+              "position": 2,
+              "item": {
+                "@type": "Course",
+                "name": "Marketing Digital & Growth",
+                "description": "Stratégies pratiques en acquisition, SEO, publicité et analytics.",
+                "provider": { "@id": "https://formation.biteckethan.com/#organization" },
+                "url": "https://formation.biteckethan.com/formations/marketing-digital"
+              }
+            }
+          ]
+        },
+        {
+          "@type": "Person",
+          "@id": "https://formation.biteckethan.com/#developer",
+          "name": "[VOTRE NOM]",
+          "url": "https://votreprofil.example.com",
+          "sameAs": [
+            "https://github.com/votrehandle",
+            "https://linkedin.com/in/votreprofil"
+          ],
+          "jobTitle": "Full‑stack developer",
+          "description": "Développeur Full‑stack — concepteur et mainteneur de la plateforme C&B Services."
+        }
+      ]
+    }
+    </script>
   </head>
   <body>
     <div id="root"></div>

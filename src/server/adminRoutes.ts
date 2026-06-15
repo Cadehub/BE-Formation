@@ -2,7 +2,7 @@ import QRCode from "qrcode";
 import { Request, Response, Router } from "express";
 import PDFDocument from "pdfkit";
 import { v4 as uuidv4 } from "uuid";
-import { getPublicSiteUrl, serverConfig } from "./config";
+import { getPublicSiteUrl } from "./config";
 import { supabaseAdmin } from "./supabase";
 import { sendCertificateMessage } from "./whatsapp";
 
@@ -65,7 +65,13 @@ const requireAdmin = async (req: Request, res: Response, next: Function) => {
             return res.status(401).json({ error: "Session invalide" });
         }
 
-        if (!user.email || !serverConfig.adminEmails.includes(user.email)) {
+        const { data: profile, error: profileError } = await supabaseAdmin
+            .from("profiles")
+            .select("id, is_admin")
+            .eq("id", user.id)
+            .single();
+
+        if (profileError || !profile || profile.is_admin !== true) {
             return res.status(403).json({ error: "Accès refusé" });
         }
 
@@ -258,17 +264,14 @@ router.post("/certificates/generate", async (req: Request, res: Response) => {
 
         const fileUrl = await uploadPromise;
 
-        const payload = {
+        // Only include columns that are present in the certificates table schema.
+        const payload: any = {
             id: certificateId,
             inscription_id: resolvedInscriptionId,
             unique_id: uniqueId,
             qr_code_url: verificationUrl,
             allow_public_indexing: existingCertificate?.allow_public_indexing ?? true,
             is_published: false,
-            student_name: resolvedStudentName,
-            formation_id: resolvedFormationId,
-            formation_title: resolvedFormationTitle,
-            file_url: fileUrl,
             is_sample: !resolvedInscriptionId,
         };
 
@@ -303,10 +306,7 @@ router.post("/certificates/:id/publish", async (req: Request, res: Response) => 
             return res.status(404).json({ error: "Certificat introuvable" });
         }
 
-        if (!certificate.file_url) {
-            return res.status(400).json({ error: "Le PDF du certificat n'a pas encore été généré" });
-        }
-
+        // Set published flag even if the DB row doesn't include a `file_url` column.
         const { data: updatedCertificate, error: updateError } = await supabaseAdmin
             .from("certificates")
             .update({ is_published: true })
@@ -343,6 +343,246 @@ router.delete("/certificates/:id", async (req: Request, res: Response) => {
     }
 });
 
+router.get("/enrollments", async (req: Request, res: Response) => {
+    try {
+        const { data, error } = await supabaseAdmin
+            .from("inscriptions")
+            .select(
+                "*, profiles(id, email, student_id, is_attested), formations(id, title, places_max, current_students)"
+            )
+            .order("created_at", { ascending: false });
+
+        if (error) {
+            return res.status(500).json({ error: error.message });
+        }
+
+        res.json({ enrollments: data });
+    } catch (err: any) {
+        res.status(500).json({ error: err.message || "Impossible de charger les inscriptions" });
+    }
+});
+
+router.post("/enrollments/:id/validate-participation", async (req: Request, res: Response) => {
+    const { id } = req.params;
+
+    try {
+        const { data: enrollment, error: enrollmentError } = await supabaseAdmin
+            .from("inscriptions")
+            .select("id, formation_id, status")
+            .eq("id", id)
+            .single();
+
+        if (enrollmentError || !enrollment) {
+            return res.status(404).json({ error: "Inscription introuvable" });
+        }
+
+        const { data: formation, error: formationError } = await supabaseAdmin
+            .from("formations")
+            .select("current_students, places_max")
+            .eq("id", enrollment.formation_id)
+            .single();
+
+        if (formationError || !formation) {
+            return res.status(404).json({ error: "Formation introuvable" });
+        }
+
+        const currentStudents = formation.current_students ?? 0;
+        const maxPlaces = formation.places_max ?? Infinity;
+        const updatedStudents = Math.min(maxPlaces, currentStudents + 1);
+
+        const { error: updateEnrollmentError } = await supabaseAdmin
+            .from("inscriptions")
+            .update({ status: "participating" })
+            .eq("id", id);
+
+        if (updateEnrollmentError) {
+            return res.status(500).json({ error: "Impossible de valider l'inscription" });
+        }
+
+        const { error: updateFormationError } = await supabaseAdmin
+            .from("formations")
+            .update({ current_students: updatedStudents })
+            .eq("id", enrollment.formation_id);
+
+        if (updateFormationError) {
+            return res.status(500).json({ error: "Impossible de mettre à jour le compteur d'étudiants" });
+        }
+
+        res.json({ success: true });
+    } catch (err: any) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+router.post("/enrollments/:id/validate-inscription-only", async (req: Request, res: Response) => {
+    const { id } = req.params;
+
+    try {
+        const { error } = await supabaseAdmin
+            .from("inscriptions")
+            .update({ status: "validated" })
+            .eq("id", id);
+
+        if (error) {
+            return res.status(500).json({ error: "Impossible de valider l'inscription" });
+        }
+
+        res.json({ success: true });
+    } catch (err: any) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+router.post("/enrollments/:id/cancel", async (req: Request, res: Response) => {
+    const { id } = req.params;
+
+    try {
+        const { data: enrollment, error: enrollmentError } = await supabaseAdmin
+            .from("inscriptions")
+            .select("id, formation_id, status")
+            .eq("id", id)
+            .single();
+
+        if (enrollmentError || !enrollment) {
+            return res.status(404).json({ error: "Inscription introuvable" });
+        }
+
+        const { error: cancelError } = await supabaseAdmin
+            .from("inscriptions")
+            .update({ status: "cancelled" })
+            .eq("id", id);
+
+        if (cancelError) {
+            return res.status(500).json({ error: "Impossible d'annuler l'inscription" });
+        }
+
+        if (enrollment.status === "participating") {
+            const { data: formation, error: formationError } = await supabaseAdmin
+                .from("formations")
+                .select("current_students, places_max")
+                .eq("id", enrollment.formation_id)
+                .single();
+
+            if (!formation || formationError) {
+                return res.status(404).json({ error: "Formation introuvable" });
+            }
+
+            const currentStudents = formation.current_students ?? 0;
+            const updatedStudents = Math.max(0, currentStudents - 1);
+
+            const { error: updateFormationError } = await supabaseAdmin
+                .from("formations")
+                .update({ current_students: updatedStudents })
+                .eq("id", enrollment.formation_id);
+
+            if (updateFormationError) {
+                return res.status(500).json({ error: "Impossible de mettre à jour le compteur d'étudiants" });
+            }
+        }
+
+        res.json({ success: true });
+    } catch (err: any) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+router.delete("/enrollments/:id", async (req: Request, res: Response) => {
+    const { id } = req.params;
+
+    try {
+        const { data: enrollment, error: enrollmentError } = await supabaseAdmin
+            .from("inscriptions")
+            .select("id, formation_id, status")
+            .eq("id", id)
+            .single();
+
+        if (enrollmentError || !enrollment) {
+            return res.status(404).json({ error: "Inscription introuvable" });
+        }
+
+        const { error: deleteError } = await supabaseAdmin
+            .from("inscriptions")
+            .delete()
+            .eq("id", id);
+
+        if (deleteError) {
+            return res.status(500).json({ error: "Impossible de supprimer l'inscription" });
+        }
+
+        if (enrollment.status === "participating") {
+            const { data: formation, error: formationError } = await supabaseAdmin
+                .from("formations")
+                .select("current_students, places_max")
+                .eq("id", enrollment.formation_id)
+                .single();
+
+            if (!formation || formationError) {
+                return res.status(404).json({ error: "Formation introuvable" });
+            }
+
+            const currentStudents = formation.current_students ?? 0;
+            const updatedStudents = Math.max(0, currentStudents - 1);
+
+            const { error: updateFormationError } = await supabaseAdmin
+                .from("formations")
+                .update({ current_students: updatedStudents })
+                .eq("id", enrollment.formation_id);
+
+            if (updateFormationError) {
+                return res.status(500).json({ error: "Impossible de mettre à jour le compteur d'étudiants" });
+            }
+        }
+
+        res.json({ success: true });
+    } catch (err: any) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// POST /api/admin/enrollments/:id/certificate-link
+router.post("/enrollments/:id/certificate-link", async (req: Request, res: Response) => {
+    const { id } = req.params;
+    const { certificate_link } = req.body;
+
+    if (!certificate_link || typeof certificate_link !== 'string') {
+        return res.status(400).json({ error: 'certificate_link is required' });
+    }
+
+    try {
+        const { data, error } = await supabaseAdmin
+            .from('inscriptions')
+            .update({ certificate_link })
+            .eq('id', id)
+            .select('*')
+            .single();
+
+        if (error) return res.status(400).json({ error: error.message });
+
+        res.json({ success: true, inscription: data });
+    } catch (err: any) {
+        res.status(500).json({ error: err.message || 'Internal Error' });
+    }
+});
+
+router.post("/profiles/:userId/attest", async (req: Request, res: Response) => {
+    const { userId } = req.params;
+
+    try {
+        const { error } = await supabaseAdmin
+            .from("profiles")
+            .update({ is_attested: true })
+            .eq("id", userId);
+
+        if (error) {
+            return res.status(500).json({ error: "Impossible d'attester l'étudiant" });
+        }
+
+        res.json({ success: true });
+    } catch (err: any) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
 router.post("/inscriptions/:id/validate-payment", async (req: Request, res: Response) => {
     const { id } = req.params;
 
@@ -370,7 +610,7 @@ router.post("/inscriptions/:id/validate-payment", async (req: Request, res: Resp
         const { data: updatedInscription, error: updateError } = await supabaseAdmin
             .from("inscriptions")
             .update({
-                status: "fully_paid",
+                status: "participating",
                 payment_status: "paid",
                 amount_paid: formation.price,
             })

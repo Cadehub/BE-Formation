@@ -8,6 +8,8 @@ export function Navbar() {
   const { theme, setTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
+  const [hasStudents, setHasStudents] = useState(false);
+  const [hasBlog, setHasBlog] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
   
@@ -15,6 +17,22 @@ export function Navbar() {
   const clickTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => setMounted(true), []);
+
+  useEffect(() => {
+    async function fetchMenuState() {
+      try {
+        const response = await fetch('/api/public/menu');
+        if (!response.ok) return;
+        const payload = await response.json();
+        setHasStudents(Boolean(payload.hasStudents));
+        setHasBlog(Boolean(payload.hasBlog));
+      } catch {
+        // Keep defaults false to avoid flashing unavailable links
+      }
+    }
+
+    fetchMenuState();
+  }, []);
 
   // Close menu when route changes
   useEffect(() => {
@@ -58,9 +76,7 @@ export function Navbar() {
           <div className="flex justify-between items-center">
             
             <a href="/" onClick={handleLogoClick} className="flex items-center space-x-3 group mr-8 cursor-pointer">
-              <div className="w-8 h-8 rounded-full bg-blue-600 text-white flex items-center justify-center group-hover:scale-110 transition-transform shadow-lg select-none shrink-0">
-                 <Fingerprint size={16} />
-               </div>
+              <img src="/icon.svg" alt="Biteck Ethan Formation" className="w-10 h-10 rounded-full bg-[var(--background)] p-1 shadow-lg" />
               <div className="flex flex-col select-none justify-center">
                  <div className="flex items-baseline whitespace-nowrap">
                    <span className="text-xl font-bold tracking-tighter leading-none">BITECK&nbsp;</span>
@@ -73,8 +89,12 @@ export function Navbar() {
             <div className="hidden md:flex items-center space-x-8 bg-[var(--card)]/50 px-6 py-2 rounded-full">
               <Link to="/" className="text-sm font-medium opacity-70 hover:opacity-100 hover:text-[var(--accent)] transition-all">Accueil</Link>
               <Link to="/formations" className="text-sm font-medium opacity-70 hover:opacity-100 hover:text-[var(--accent)] transition-all">Nos Formations</Link>
-              <Link to="/blog" className="text-sm font-medium opacity-70 hover:opacity-100 hover:text-[var(--accent)] transition-all">Journal</Link>
-              <Link to="/verify" className="text-sm font-medium opacity-70 hover:opacity-100 hover:text-[var(--accent)] transition-all">Certificats</Link>
+              {hasBlog && (
+                <Link to="/blog" className="text-sm font-medium opacity-70 hover:opacity-100 hover:text-[var(--accent)] transition-all">Journal</Link>
+              )}
+              {hasStudents && (
+                <Link to="/etudiants" className="text-sm font-medium opacity-70 hover:opacity-100 hover:text-[var(--accent)] transition-all">Nos Étudiants</Link>
+              )}
               <Link to="/student/login" className="text-sm font-medium opacity-70 hover:opacity-100 hover:text-[var(--accent)] transition-all">Espace Étudiant</Link>
             </div>
 
@@ -113,10 +133,22 @@ export function Navbar() {
               <Link to="/" onClick={() => setIsOpen(false)} className="text-3xl font-light tracking-tighter hover:text-[var(--accent)] transition-colors">Accueil</Link>
               <div className="w-full h-[1px] bg-[var(--border)]"></div>
               <Link to="/formations" onClick={() => setIsOpen(false)} className="text-3xl font-light tracking-tighter hover:text-[var(--accent)] transition-colors">Nos Formations</Link>
-              <div className="w-full h-[1px] bg-[var(--border)]"></div>
-              <Link to="/blog" onClick={() => setIsOpen(false)} className="text-3xl font-light tracking-tighter hover:text-[var(--accent)] transition-colors">Journal (Blog)</Link>
+              {hasBlog && (
+                <>
+                  <div className="w-full h-[1px] bg-[var(--border)]"></div>
+                  <Link to="/blog" onClick={() => setIsOpen(false)} className="text-3xl font-light tracking-tighter hover:text-[var(--accent)] transition-colors">Journal</Link>
+                </>
+              )}
+              {hasStudents && (
+                <>
+                  <div className="w-full h-[1px] bg-[var(--border)]"></div>
+                  <Link to="/etudiants" onClick={() => setIsOpen(false)} className="text-3xl font-light tracking-tighter hover:text-[var(--accent)] transition-colors">Nos Étudiants</Link>
+                </>
+              )}
               <div className="w-full h-[1px] bg-[var(--border)]"></div>
               <Link to="/verify" onClick={() => setIsOpen(false)} className="text-3xl font-light tracking-tighter hover:text-[var(--accent)] transition-colors">Vérifier un Certificat</Link>
+              <div className="w-full h-[1px] bg-[var(--border)]"></div>
+              <Link to="/student/login" onClick={() => setIsOpen(false)} className="text-3xl font-light tracking-tighter hover:text-[var(--accent)] transition-colors">Espace Étudiant</Link>
             </div>
           </motion.div>
         )}

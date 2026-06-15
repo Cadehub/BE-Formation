@@ -36,7 +36,22 @@ export function VerifyCertificate() {
         .eq('is_published', true)
         .or(`id.eq.${id},unique_id.eq.${id}`)
         .maybeSingle();
-      setCertificate(data);
+
+      let cert: Certificate | null = data || null;
+
+      // If certificate exists but lacks student_name/formation_title, try to resolve via linked inscription
+      if (cert && cert.inscription_id && (!cert.student_name || !cert.formation_title)) {
+        const { data: ins } = await supabase.from('inscriptions').select('id, full_name, formation_id').eq('id', cert.inscription_id).maybeSingle();
+        if (ins) {
+          cert = { ...cert, student_name: cert.student_name || ins.full_name } as Certificate;
+          if (ins.formation_id && !cert.formation_title) {
+            const { data: f } = await supabase.from('formations').select('id, title').eq('id', ins.formation_id).maybeSingle();
+            if (f) cert.formation_title = f.title;
+          }
+        }
+      }
+
+      setCertificate(cert);
       setLoading(false);
   };
 

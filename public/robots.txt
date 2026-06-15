@@ -2,5 +2,6 @@ User-agent: *
 Allow: /
 Disallow: /admin
 Disallow: /admin/*
+Disallow: /api/admin
 Sitemap: https://formation.biteckethan.com/sitemap.xml
 Host: formation.biteckethan.com

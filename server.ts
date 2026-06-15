@@ -30,12 +30,8 @@ app.get("/api/health", (_req, res) => {
 });
 
 // Server-side backend API routes implementation placeholders
-import { handleChariowWebhook } from "./src/server/webhooks";
 import adminRoutes from "./src/server/adminRoutes";
-
 import publicRoutes from "./src/server/publicRoutes";
-
-app.post("/api/webhooks/chariow", handleChariowWebhook);
 
 // Serve admin sub-routes
 app.use("/api/admin", adminRoutes);

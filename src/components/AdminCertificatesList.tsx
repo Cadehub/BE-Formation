@@ -22,7 +22,7 @@ export function AdminCertificatesList({ formations, inscriptions }: Props) {
 
     const eligibleInscriptions = useMemo(() => {
         return inscriptions.filter((inscription) =>
-            ['registered', 'fully_paid', 'paid_online'].includes(inscription.status)
+            ['validated', 'participating'].includes(inscription.status)
         );
     }, [inscriptions]);
 
@@ -141,7 +141,8 @@ export function AdminCertificatesList({ formations, inscriptions }: Props) {
         <div className="space-y-4">
             {certificates.map((certificate) => {
                 const linkedInscription = getLinkedInscription(certificate);
-                const canPublish = !!certificate.file_url && !!certificate.inscription_id && !certificate.is_published;
+                // `file_url` may not exist in some schemas; accept qr_code_url/unique_id as existing proof
+                const canPublish = (!!certificate.file_url || !!certificate.qr_code_url || !!certificate.unique_id) && !!certificate.inscription_id && !certificate.is_published;
 
                 return (
                     <div key={certificate.id} className="p-4 border border-[var(--border)] bg-[var(--background)] rounded-xl flex flex-col gap-4 md:flex-row md:items-center md:justify-between group">
@@ -172,8 +173,8 @@ export function AdminCertificatesList({ formations, inscriptions }: Props) {
                             }`}>
                                 {certificate.is_published ? 'Publié' : 'Brouillon'}
                             </span>
-                            {certificate.file_url ? (
-                                <a href={certificate.file_url} target="_blank" rel="noreferrer" className="p-2 hover:bg-[var(--foreground)]/5 rounded-lg transition-colors border border-transparent hover:border-[var(--border)]" title="Voir PDF">
+                            {(certificate.file_url || certificate.qr_code_url) ? (
+                                <a href={certificate.file_url || certificate.qr_code_url} target="_blank" rel="noreferrer" className="p-2 hover:bg-[var(--foreground)]/5 rounded-lg transition-colors border border-transparent hover:border-[var(--border)]" title="Voir PDF">
                                     <ExternalLink className="w-4 h-4" />
                                 </a>
                             ) : (

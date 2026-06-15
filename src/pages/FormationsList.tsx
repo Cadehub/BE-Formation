@@ -167,10 +167,10 @@ export function FormationsList() {
                         {/* Contenu de la carte */}
                         <div className="absolute inset-0 p-6 lg:p-10 flex flex-col justify-between z-10">
                             {/* Header : Catégorie & Date de début */}
-                            <div className="flex flex-wrap justify-between items-center gap-2">
-                                <span className="bg-[var(--background)]/90 text-[var(--foreground)] px-4 py-1.5 rounded-full text-xs font-bold tracking-widest uppercase border border-[var(--border)] shadow-sm">
-                                    {formation.category}
-                                </span>
+                              <div className="flex flex-wrap justify-between items-center gap-2">
+                                    <span className="bg-[var(--background)]/90 text-[var(--foreground)] px-4 py-1.5 rounded-full text-xs font-bold tracking-widest uppercase border border-[var(--border)] shadow-sm">
+                                      {categories.find(c => c.id === formation.category_id)?.name || 'N/C'}
+                                    </span>
                                 {formattedStartDate && (
                                     <span className="bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20 px-3 py-1.5 rounded-full text-xs font-semibold flex items-center space-x-1.5 backdrop-blur-md">
                                         <Calendar size={13} />

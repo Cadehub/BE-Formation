@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { HelmetProvider } from 'react-helmet-async';
 import { Navbar } from './components/Navbar';
 import { Footer } from './components/Footer';
+import { FloatingWhatsApp } from './components/FloatingWhatsApp';
 import { ScrollToTop } from './components/ScrollToTop';
 
 // Use basic lazy imports or just import directly for now
@@ -19,6 +20,10 @@ import { Payer } from './pages/Payer';
 import { PayInscription } from './pages/PayInscription';
 import { StudentLogin } from './pages/StudentLogin';
 import { StudentDashboard } from './pages/StudentDashboard';
+import { StudentProfile } from './pages/StudentProfile';
+import { FormationGraduates } from './pages/FormationGraduates';
+import { StudentSettings } from './pages/StudentSettings';
+import { StudentsDirectory } from './pages/StudentsDirectory';
 
 export default function App() {
   return (
@@ -34,6 +39,10 @@ export default function App() {
               <Route path="/formations/:slug" element={<FormationDetails />} />
               <Route path="/student/login" element={<StudentLogin />} />
               <Route path="/dashboard" element={<StudentDashboard />} />
+              <Route path="/etudiants/:student_id" element={<StudentProfile />} />
+              <Route path="/formations/:slug/etudiants" element={<FormationGraduates />} />
+              <Route path="/etudiants" element={<StudentsDirectory />} />
+              <Route path="/student/settings" element={<StudentSettings />} />
               <Route path="/payer" element={<Payer />} />
               <Route path="/pay/:id" element={<PayInscription />} />
               <Route path="/blog" element={<BlogIndex />} />
@@ -52,6 +61,7 @@ export default function App() {
             </Routes>
           </main>
         <Footer />
+        <FloatingWhatsApp />
       </div>
     </BrowserRouter>
   </HelmetProvider>

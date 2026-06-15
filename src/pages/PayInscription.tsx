@@ -59,7 +59,7 @@ export function PayInscription() {
   const { inscription, formation } = data;
   const amountPaid = inscription.amount_paid || 0;
   const remaining = formation.price - amountPaid;
-  const isFullyPaid = inscription.status === 'fully_paid' || remaining <= 0;
+    const isFullyPaid = inscription.status === 'participating' || remaining <= 0;
 
   return (
     <div className="min-h-[80vh] flex items-center justify-center p-4 py-12">

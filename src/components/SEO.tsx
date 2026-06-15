@@ -16,11 +16,16 @@ const defaultDescription =
   'Biteck De Bong Ethan Cade et Made Easy Tech offrent des formations en informatique, marketing digital, bureautique, développement web et design à Douala et en Afrique francophone. Apprenez l’informatique, obtenez une certification bureautique et boostez votre carrière avec des parcours pratiques et reconnus.';
 
 const defaultKeywords =
-  'formation informatique, marketing digital, bureautique, développement web, design, certification bureautique, formation à Douala, formation Afrique francophone, Biteck De Bong Ethan Cade, Made Easy Tech, dev, dev web, mkdg, TIC, SEO, e-learning, cours en ligne, formation digitale, formation professionnelle, formation certifiante, formation en ligne, formation présentielle, formation hybride, formation continue, formation pour débutants, formation avancée, formation sur mesure, formation en entreprise, formation à distance, formation en présentiel, formation en ligne, formation en blended learning, formation en bootcamp, formation accélérée, formation pour les jeunes, formation pour les professionnels, formation pour les étudiants, formation pour les entrepreneurs, formation pour les freelances, formation pour les demandeurs d’emploi, formation pour les passionnés d’informatique et de marketing digital.';
+  'C&B Services, Biteck Ethan Formation, formation informatique, marketing digital, bureautique, développement web, design, certification bureautique, formation à Douala, formation Afrique francophone, Biteck De Bong Ethan Cade, Made Easy Tech, dev, dev web, mkdg, TIC, SEO, e-learning, cours en ligne, formation digitale, formation professionnelle, formation certifiante, formation en ligne, formation présentielle, formation hybride, formation continue, formation pour débutants, formation avancée, formation sur mesure, formation en entreprise, formation à distance, formation en présentiel, formation en ligne, formation en blended learning, formation en bootcamp, formation accélérée, formation pour les jeunes, formation pour les professionnels, formation pour les entrepreneurs, formation pour les freelances, formation pour les demandeurs d’emploi, formation pour les passionnés d’informatique et de marketing digital.';
 
 const organizationSchema = {
   '@type': 'EducationalOrganization',
-  name: 'Made Easy Tech',
+  name: 'C&B Services',
+  legalName: 'C&B Services',
+  brand: {
+    '@type': 'Brand',
+    name: 'Biteck Ethan Formation',
+  },
   url: siteUrl,
   logo: defaultImage,
   description: defaultDescription,

@@ -7,7 +7,6 @@ import { Lock, Loader2, ArrowRight } from 'lucide-react';
 
 export function StudentLogin() {
   const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [mode, setMode] = useState<'login' | 'signup'>('login');
@@ -30,17 +29,27 @@ export function StudentLogin() {
     setError('');
     setSuccessMessage('');
 
-    if (!email.trim() || !password.trim()) {
-      setError('Veuillez remplir tous les champs.');
+    if (!email.trim()) {
+      setError('Veuillez entrer votre adresse email.');
       return;
     }
 
     setLoading(true);
     try {
+      const redirectTo = `${window.location.origin}/dashboard`;
+
       if (mode === 'signup') {
+        const randomPassword =
+          typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+            ? crypto.randomUUID()
+            : `${Math.random().toString(36).slice(2)}${Date.now().toString(36)}`;
+
         const { data, error } = await supabase.auth.signUp({
           email,
-          password,
+          password: randomPassword,
+          options: {
+            emailRedirectTo: redirectTo,
+          },
         });
 
         if (error) {
@@ -48,22 +57,24 @@ export function StudentLogin() {
           return;
         }
 
-        if (data.user) {
+        if (data?.user?.id) {
           await supabase.from('profiles').upsert({
             id: data.user.id,
-            email: data.user.email,
+            email,
             is_admin: false,
           });
         }
 
         setSuccessMessage(
-          "Compte créé. Connectez-vous ou vérifiez votre boîte email si la confirmation est requise."
+          "Inscription réussie. Un email de connexion vous a été envoyé. Vérifiez votre boîte aux lettres."
         );
         setMode('login');
       } else {
-        const { error } = await supabase.auth.signInWithPassword({
+        const { error } = await supabase.auth.signInWithOtp({
           email,
-          password,
+          options: {
+            emailRedirectTo: redirectTo,
+          },
         });
 
         if (error) {
@@ -71,7 +82,9 @@ export function StudentLogin() {
           return;
         }
 
-        navigate('/dashboard', { replace: true });
+        setSuccessMessage(
+          "Un lien magique a été envoyé à votre adresse email. Cliquez dessus pour accéder à votre espace étudiant."
+        );
       }
     } catch (err: any) {
       setError(err.message || 'Erreur inattendue.');
@@ -114,17 +127,12 @@ export function StudentLogin() {
                 placeholder="vous@exemple.com"
                 className="w-full px-4 py-3 rounded-2xl bg-[var(--background)] border border-[var(--border)] outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/10 text-sm"
               />
-            </div>
-            <div>
-              <label className="text-xs font-bold uppercase tracking-widest opacity-70 mb-2 block">Mot de passe</label>
-              <input
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                placeholder="••••••••"
-                className="w-full px-4 py-3 rounded-2xl bg-[var(--background)] border border-[var(--border)] outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/10 text-sm"
-              />
+              <p className="mt-2 text-xs opacity-70">
+                {mode === 'login'
+                  ? "Un lien magique sera envoyé à votre email pour vous connecter."
+                  : "Nous créerons un compte et vous enverrons un email de confirmation."
+                }
+              </p>
             </div>
             <button
               type="submit"
@@ -140,14 +148,14 @@ export function StudentLogin() {
             {mode === 'login' ? (
               <>
                 Pas encore de compte ?{' '}
-                <button onClick={() => setMode('signup')} className="font-semibold text-blue-600 hover:underline">
+                <button type="button" onClick={() => setMode('signup')} className="font-semibold text-blue-600 hover:underline">
                   S'inscrire
                 </button>
               </>
             ) : (
               <>
                 Déjà inscrit ?{' '}
-                <button onClick={() => setMode('login')} className="font-semibold text-blue-600 hover:underline">
+                <button type="button" onClick={() => setMode('login')} className="font-semibold text-blue-600 hover:underline">
                   Se connecter
                 </button>
               </>

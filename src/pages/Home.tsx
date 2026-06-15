@@ -4,6 +4,7 @@ import { ArrowRight, Fingerprint, Layers, Users, Award } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { SEO } from '../components/SEO';
+import { ReviewsCarousel } from '../components/ReviewsCarousel';
 
 function Counter({ value, className }: { value: number, className?: string }) {
   const count = useMotionValue(0);
@@ -23,11 +24,12 @@ function Counter({ value, className }: { value: number, className?: string }) {
 
 export function Home() {
   const [stats, setStats] = useState({ totalStudents: 0, activeCohorts: 0 });
+  const [hasTestimonials, setHasTestimonials] = useState(false);
 
   useEffect(() => {
     async function fetchStats() {
       const [studentsRes, cohortsRes] = await Promise.all([
-         supabase.from('inscriptions').select('*', { count: 'exact', head: true }).in('status', ['paid_online', 'registered', 'fully_paid']),
+         supabase.from('inscriptions').select('*', { count: 'exact', head: true }).eq('status', 'participating'),
          supabase.from('formations').select('*', { count: 'exact', head: true }).eq('is_active', true)
       ]);
 
@@ -37,6 +39,20 @@ export function Home() {
       });
     }
     fetchStats();
+  }, []);
+
+  useEffect(() => {
+    async function fetchTestimonialsCount() {
+      const { count, error } = await supabase
+        .from('formation_reviews')
+        .select('id', { count: 'exact', head: true });
+
+      if (!error && count && count > 0) {
+        setHasTestimonials(true);
+      }
+    }
+
+    fetchTestimonialsCount();
   }, []);
 
   return (
@@ -105,6 +121,8 @@ export function Home() {
           </motion.div>
         </div>
       </section>
+
+      {hasTestimonials && <ReviewsCarousel />}
 
       {/* Certification & Vision Statement */}
       <section className="py-32 px-6 lg:px-12 max-w-[1600px] mx-auto border-t border-[var(--border)]">

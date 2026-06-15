@@ -97,9 +97,9 @@ export function Payer() {
                                  <div>
                                      <div className="flex items-center space-x-2 mb-2">
                                         <span className={`px-2.5 py-0.5 rounded-full text-[10px] uppercase tracking-widest font-bold ${
-                                            ins.status === 'registered' ? 'bg-blue-500/10 text-blue-600 border border-blue-500/20' : 'bg-yellow-500/10 text-yellow-600 border border-yellow-500/20'
+                                          ins.status === 'validated' ? 'bg-blue-500/10 text-blue-600 border border-blue-500/20' : 'bg-yellow-500/10 text-yellow-600 border border-yellow-500/20'
                                         }`}>
-                                            {ins.status === 'registered' ? 'Inscrit' : 'En attente'}
+                                          {ins.status === 'validated' ? 'Inscrit' : 'En attente'}
                                         </span>
                                         <span className="text-xs opacity-50 font-mono">{ins.id.split('-')[0]}</span>
                                      </div>

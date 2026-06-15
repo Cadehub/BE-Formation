@@ -3,10 +3,10 @@ import { motion } from 'motion/react';
 import { supabase } from '../lib/supabase';
 import { SEO } from '../components/SEO';
 import { PWAInstall } from '../components/PWAInstall';
-import { Search, Loader2, DollarSign, Users, Database, LogOut, Send, Plus, FileText, Award, ExternalLink, Calendar, RefreshCw, Power, Trash2 } from 'lucide-react';
-import { Inscription, Formation, Blog, Category } from '../types';
+import { Search, Loader2, DollarSign, Users, Database, LogOut, Send, Plus, FileText, Award, ExternalLink, Calendar, RefreshCw, Power, Trash2, ChevronDown, CircleCheck, XCircle } from 'lucide-react';
+import { Enrollment, Inscription, Formation, Blog, Category } from '../types';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '../components/ui/tabs';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { AdminCertificatesList } from '../components/AdminCertificatesList';
 import { isFormationExpired } from '../lib/formationStatus';
 
@@ -23,13 +23,20 @@ export function AdminDashboard() {
   const navigate = useNavigate();
   const [searchTerm, setSearchTerm] = useState('');
   const debouncedSearch = useDebounce(searchTerm, 300);
-  const [statusFilter, setStatusFilter] = useState<'all' | 'registered' | 'fully_paid' | 'pending'>('all');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'validated' | 'participating' | 'cancelled' | 'pending'>('all');
   
-  const [inscriptions, setInscriptions] = useState<Inscription[]>([]);
+  const [inscriptions, setInscriptions] = useState<Enrollment[]>([]);
   const [formations, setFormations] = useState<Formation[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [blogs, setBlogs] = useState<Blog[]>([]);
   const [loading, setLoading] = useState(true);
+  const [enrollmentsLoading, setEnrollmentsLoading] = useState(false);
+  const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
+  const [openActionMenuId, setOpenActionMenuId] = useState<string | null>(null);
+  const activeActionEnrollment = useMemo(
+    () => inscriptions.find((ins) => ins.id === openActionMenuId) || null,
+    [inscriptions, openActionMenuId]
+  );
 
   const [validationLoading, setValidationLoading] = useState<string | null>(null);
 
@@ -50,9 +57,11 @@ export function AdminDashboard() {
   const [newCategory, setNewCategory] = useState({ name: '' });
   const [newBlog, setNewBlog] = useState<Partial<Blog>>({ title: '', excerpt: '', content: '', seo_keywords: '' });
   const [certInscriptionId, setCertInscriptionId] = useState('');
+  const [certLink, setCertLink] = useState('');
   const [formLoading, setFormLoading] = useState(false);
   const [logoUrl, setLogoUrl] = useState('');
   const [logoLoading, setLogoLoading] = useState(false);
+  const [whatsappNumber, setWhatsappNumber] = useState('');
   const [formationSyncLoading, setFormationSyncLoading] = useState(false);
   const [formationModalLoading, setFormationModalLoading] = useState(false);
   const [deletingCategoryId, setDeletingCategoryId] = useState<string | null>(null);
@@ -64,21 +73,92 @@ export function AdminDashboard() {
     await supabase.auth.signOut();
   };
 
+  const getAdminToken = async () => {
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+    return session?.access_token || null;
+  };
+
   const loadStats = async () => {
     setLoading(true);
-    const [insRes, formRes, blogsRes, catRes, setRes] = await Promise.all([
-        supabase.from('inscriptions').select('*').order('created_at', { ascending: false }),
+
+    const token = await getAdminToken();
+    if (!token) {
+      setLoading(false);
+      return;
+    }
+
+    try {
+      const enrollRes = await fetch('/api/admin/enrollments', {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+      const enrollJson = await enrollRes.json();
+      if (enrollRes.ok && Array.isArray(enrollJson.enrollments)) {
+        setInscriptions(
+          enrollJson.enrollments.map((item: any) => ({
+            ...item,
+            profile: Array.isArray(item.profiles) ? item.profiles[0] : item.profiles,
+            formation: Array.isArray(item.formations) ? item.formations[0] : item.formations,
+          }))
+        );
+      } else {
+        console.error('Erreur chargement inscriptions admin:', enrollJson.error || enrollJson);
+      }
+    } catch (err: any) {
+      console.error('Erreur chargement inscriptions admin:', err.message || err);
+    }
+
+    try {
+      const [formRes, blogsRes, catRes, setRes] = await Promise.all([
         supabase.from('formations').select('*').order('start_date', { ascending: true }),
         supabase.from('blogs').select('*').order('published_at', { ascending: false }),
         supabase.from('categories').select('*').order('name', { ascending: true }),
-        supabase.from('platform_settings').select('logo_url').eq('id', 1).maybeSingle()
-    ]);
-    if (insRes.data) setInscriptions(insRes.data);
-    if (formRes.data) setFormations(formRes.data);
-    if (blogsRes.data) setBlogs(blogsRes.data);
-    if (catRes.data) setCategories(catRes.data);
-    if (setRes.data) setLogoUrl(setRes.data.logo_url || '');
+        supabase.from('platform_settings').select('logo_url, whatsapp_number').eq('id', 1).maybeSingle(),
+      ]);
+      if (formRes.data) setFormations(formRes.data);
+      if (blogsRes.data) setBlogs(blogsRes.data);
+      if (catRes.data) setCategories(catRes.data);
+      if (setRes.data) {
+        setLogoUrl(setRes.data.logo_url || '');
+        setWhatsappNumber(setRes.data.whatsapp_number || '');
+      }
+    } catch (err: any) {
+      console.error('Erreur chargement données admin:', err.message || err);
+    }
+
     setLoading(false);
+  };
+
+  const refreshEnrollments = async () => {
+    setEnrollmentsLoading(true);
+    const token = await getAdminToken();
+    if (!token) {
+      setEnrollmentsLoading(false);
+      return;
+    }
+
+    try {
+      const response = await fetch('/api/admin/enrollments', {
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      });
+      const json = await response.json();
+      if (response.ok && Array.isArray(json.enrollments)) {
+        setInscriptions(
+          json.enrollments.map((item: any) => ({
+            ...item,
+            profile: Array.isArray(item.profiles) ? item.profiles[0] : item.profiles,
+            formation: Array.isArray(item.formations) ? item.formations[0] : item.formations,
+          }))
+        );
+      }
+    } catch (err: any) {
+      console.error('Erreur rechargement inscriptions:', err.message || err);
+    }
+    setEnrollmentsLoading(false);
   };
 
   const syncFormationStatuses = async (showAlert = false) => {
@@ -103,10 +183,12 @@ export function AdminDashboard() {
       }
 
       const ids = expiredFormations.map((formation) => formation.id);
-      const { data: updatedFormations, error: updateError } = await supabase
+      const updateResult = await supabase
         .from('formations')
         .update({ is_active: false })
         .in('id', ids);
+      const updatedFormations = updateResult.data as Array<Record<string, unknown>> | null;
+      const updateError = updateResult.error;
 
       if (updateError) {
         throw new Error(updateError.message || 'Impossible de désactiver les formations expirées.');
@@ -114,7 +196,7 @@ export function AdminDashboard() {
 
       if (showAlert) {
         alert(
-          `${updatedFormations?.length ?? ids.length} formation(s) expirée(s) ont été désactivées.`
+          `${updatedFormations ? updatedFormations.length : ids.length} formation(s) expirée(s) ont été désactivées.`
         );
       }
     } catch (err: any) {
@@ -151,7 +233,7 @@ export function AdminDashboard() {
           .reduce((sum, ins) => sum + (ins.amount_paid || 0), 0);
           
       const legacyRevenue = inscriptions
-          .filter(i => i.status === 'paid_online' || i.status === 'fully_paid')
+          .filter(i => i.status === 'validated' || i.status === 'participating')
           .reduce((sum, ins) => {
               const f = formations.find(f => f.id === ins.formation_id);
               return sum + (f?.price || 0);
@@ -165,7 +247,7 @@ export function AdminDashboard() {
 
   const eligibleInscriptions = useMemo(() => {
     return inscriptions.filter((inscription) =>
-      ['registered', 'fully_paid', 'paid_online'].includes(inscription.status)
+      ['validated', 'participating'].includes(inscription.status)
     );
   }, [inscriptions]);
 
@@ -341,7 +423,7 @@ export function AdminDashboard() {
           const { data: updatedInscription, error: updateError } = await supabase
             .from('inscriptions')
             .update({
-              status: 'fully_paid',
+              status: 'participating',
               payment_status: 'paid',
               amount_paid: formation.price,
             })
@@ -360,6 +442,64 @@ export function AdminDashboard() {
       } finally {
           setValidationLoading(null);
       }
+  };
+
+  const sendAdminRequest = async (path: string, method = 'POST') => {
+    const token = await getAdminToken();
+    if (!token) {
+      throw new Error('Session admin introuvable.');
+    }
+
+    const response = await fetch(path, {
+      method,
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+    });
+
+    const json = await response.json();
+    if (!response.ok) {
+      throw new Error(json.error || 'Erreur serveur');
+    }
+
+    return json;
+  };
+
+  const runEnrollmentAction = async (
+    action: 'participation' | 'inscription_only' | 'cancel' | 'delete' | 'attest',
+    id: string,
+    userId?: string
+  ) => {
+    if (!id && action !== 'attest') {
+      throw new Error('Identifiant introuvable');
+    }
+
+    if (action === 'delete' && !window.confirm('Supprimer définitivement cette inscription ?')) {
+      return;
+    }
+
+    setActionLoadingId(id);
+    try {
+      if (action === 'participation') {
+        await sendAdminRequest(`/api/admin/enrollments/${id}/validate-participation`, 'POST');
+      } else if (action === 'inscription_only') {
+        await sendAdminRequest(`/api/admin/enrollments/${id}/validate-inscription-only`, 'POST');
+      } else if (action === 'cancel') {
+        await sendAdminRequest(`/api/admin/enrollments/${id}/cancel`, 'POST');
+      } else if (action === 'delete') {
+        await sendAdminRequest(`/api/admin/enrollments/${id}`, 'DELETE');
+      } else if (action === 'attest') {
+        if (!userId) throw new Error('Profil étudiant introuvable');
+        await sendAdminRequest(`/api/admin/profiles/${userId}/attest`, 'POST');
+      }
+      await refreshEnrollments();
+    } catch (err: any) {
+      alert(`Erreur: ${err.message}`);
+    } finally {
+      setActionLoadingId(null);
+      setOpenActionMenuId(null);
+    }
   };
 
   const addFormation = async (e: React.FormEvent) => {
@@ -417,7 +557,7 @@ export function AdminDashboard() {
   const saveLogo = async (e: React.FormEvent) => {
       e.preventDefault();
       setLogoLoading(true);
-      const { error } = await supabase.from('platform_settings').upsert({ id: 1, logo_url: logoUrl });
+      const { error } = await supabase.from('platform_settings').upsert({ id: 1, logo_url: logoUrl, whatsapp_number: whatsappNumber });
       if (error) alert("Erreur lors de l'enregistrement du logo: " + error.message);
       else alert("Logo enregistré avec succès");
       setLogoLoading(false);
@@ -472,6 +612,42 @@ export function AdminDashboard() {
           setFormLoading(false);
       }
   };
+
+    const addCertificateLink = async (e: React.FormEvent) => {
+      e.preventDefault();
+      if (!certInscriptionId) {
+        alert('Veuillez sélectionner une inscription');
+        return;
+      }
+      if (!certLink.trim()) {
+        alert('Veuillez fournir un lien pour le certificat');
+        return;
+      }
+
+      setFormLoading(true);
+      try {
+        const token = await getAdminToken();
+        if (!token) throw new Error('Session admin introuvable');
+
+        const res = await fetch(`/api/admin/enrollments/${certInscriptionId}/certificate-link`, {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ certificate_link: certLink.trim() }),
+        });
+
+        const json = await res.json();
+        if (!res.ok) throw new Error(json.error || 'Erreur serveur');
+
+        alert('Lien de certificat enregistré.');
+        setCertInscriptionId('');
+        setCertLink('');
+        await loadStats();
+      } catch (err: any) {
+        alert(`Erreur: ${err.message}`);
+      } finally {
+        setFormLoading(false);
+      }
+    };
 
   if (loading && inscriptions.length === 0) {
       return <div className="min-h-[70vh] flex items-center justify-center"><Loader2 className="w-8 h-8 animate-spin text-blue-600" /></div>;
@@ -561,6 +737,10 @@ export function AdminDashboard() {
                     <form onSubmit={saveLogo} className="space-y-4">
                         <p className="text-sm opacity-70 mb-2">Logo global de la plateforme (pour certificats)</p>
                         <input type="url" placeholder="URL du Logo" value={logoUrl} onChange={e => setLogoUrl(e.target.value)} className="w-full px-4 py-3 rounded-xl bg-[var(--background)] border border-[var(--border)] outline-none text-sm"/>
+                        <div>
+                          <p className="text-sm opacity-70 mb-2">Numéro WhatsApp (administration)</p>
+                          <input type="tel" placeholder="Ex: +237699999999" value={whatsappNumber} onChange={e => setWhatsappNumber(e.target.value)} className="w-full px-4 py-3 rounded-xl bg-[var(--background)] border border-[var(--border)] outline-none text-sm"/>
+                        </div>
                         <button type="submit" disabled={logoLoading} className="px-6 py-3 rounded-xl bg-[var(--foreground)] text-[var(--background)] font-medium flex items-center justify-center transition-transform hover:scale-[1.02]">
                             {logoLoading ? <Loader2 className="w-4 h-4 animate-spin"/> : "Sauvegarder"}
                         </button>
@@ -689,65 +869,79 @@ export function AdminDashboard() {
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    {formations.map(form => (
-                        <div key={form.id} className="p-5 border border-[var(--border)] rounded-2xl bg-[var(--card)] flex flex-col justify-between">
+                      {formations.map((form) => {
+                        const participantCount = inscriptions.filter((ins) => ins.formation_id === form.id && ins.status === 'participating').length;
+                        return (
+                          <div key={form.id} className="p-5 border border-[var(--border)] rounded-2xl bg-[var(--card)] flex flex-col justify-between">
                             <div>
-                                <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
-                                    <div className="text-xs font-bold uppercase tracking-widest text-blue-600">{form.category}</div>
-                                    <span className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider border ${
-                                        form.is_active !== false
-                                            ? 'bg-green-500/10 text-green-600 border-green-500/20'
-                                            : 'bg-slate-500/10 text-slate-600 border-slate-500/20'
-                                    }`}>
-                                        {form.is_active !== false ? 'Active' : 'Inactive'}
-                                    </span>
-                                </div>
-                                <h3 className="font-bold text-lg leading-tight mb-2">{form.title}</h3>
-                                <p className="text-sm opacity-70 line-clamp-2 mb-4">{form.description}</p>
-                                <div className="space-y-2 text-xs opacity-70">
-                                    <p className="flex items-center gap-2"><Calendar className="w-3.5 h-3.5" /> Début: {form.start_date || 'Non défini'}</p>
-                                    <p className="flex items-center gap-2"><Calendar className="w-3.5 h-3.5" /> Fin: {form.end_date || 'Non définie'}</p>
-                                    <p className="break-all">WhatsApp: {form.whatsapp_url || 'Aucun lien configuré'}</p>
-                                    {isFormationExpired(form) && (
-                                        <p className="text-amber-600 font-medium">La date de fin est dépassée.</p>
-                                    )}
-                                </div>
+                              <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+                                <div className="text-xs font-bold uppercase tracking-widest text-blue-600">{form.category_id ?? 'N/C'}</div>
+                                <span className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider border ${
+                                  form.is_active !== false
+                                    ? 'bg-green-500/10 text-green-600 border-green-500/20'
+                                    : 'bg-slate-500/10 text-slate-600 border-slate-500/20'
+                                }`}>
+                                  {form.is_active !== false ? 'Active' : 'Inactive'}
+                                </span>
+                              </div>
+                              <h3 className="font-bold text-lg leading-tight mb-2">{form.title}</h3>
+                              <p className="text-sm opacity-70 line-clamp-2 mb-4">{form.description}</p>
+                              <div className="space-y-2 text-xs opacity-70">
+                                <p className="flex items-center gap-2"><Calendar className="w-3.5 h-3.5" /> Début: {form.start_date || 'Non défini'}</p>
+                                <p className="flex items-center gap-2"><Calendar className="w-3.5 h-3.5" /> Fin: {form.end_date || 'Non définie'}</p>
+                                <p className="break-all">WhatsApp: {form.whatsapp_url || 'Aucun lien configuré'}</p>
+                                {participantCount > 0 && (
+                                  <p className="text-slate-700 font-medium">Étudiants formés: {participantCount}</p>
+                                )}
+                                {isFormationExpired(form) && (
+                                  <p className="text-amber-600 font-medium">La date de fin est dépassée.</p>
+                                )}
+                              </div>
                             </div>
                             <div className="flex justify-between items-end border-t border-[var(--border)] pt-4 mt-auto">
-                                <div>
-                                    <p className="text-[10px] uppercase opacity-50 tracking-wider">Inscription</p>
-                                    <p className="font-semibold text-sm">{form.registration_fee?.toLocaleString() || 0} FCFA</p>
-                                </div>
-                                <div className="text-right">
-                                    <p className="text-[10px] uppercase opacity-50 tracking-wider">Total</p>
-                                    <p className="font-bold text-lg text-blue-600">{form.price.toLocaleString()} FCFA</p>
-                                </div>
+                              <div>
+                                <p className="text-[10px] uppercase opacity-50 tracking-wider">Inscription</p>
+                                <p className="font-semibold text-sm">{form.registration_fee?.toLocaleString() || 0} FCFA</p>
+                              </div>
+                              <div className="text-right">
+                                <p className="text-[10px] uppercase opacity-50 tracking-wider">Total</p>
+                                <p className="font-bold text-lg text-blue-600">{form.price.toLocaleString()} FCFA</p>
+                              </div>
                             </div>
                             <div className="mt-4 grid grid-cols-1 sm:grid-cols-3 gap-3">
-                                <button
-                                    onClick={() => handleFormationToggle(form)}
-                                    className="px-4 py-3 rounded-xl border border-[var(--border)] hover:bg-[var(--foreground)]/5 text-sm font-medium flex items-center justify-center gap-2"
+                              <button
+                                onClick={() => handleFormationToggle(form)}
+                                className="px-4 py-3 rounded-xl border border-[var(--border)] hover:bg-[var(--foreground)]/5 text-sm font-medium flex items-center justify-center gap-2"
+                              >
+                                <Power className="w-4 h-4" />
+                                <span>{form.is_active !== false ? 'Terminer' : 'Réactiver'}</span>
+                              </button>
+                              <button
+                                onClick={() => openFormationEditor(form)}
+                                className="px-4 py-3 rounded-xl bg-[var(--foreground)] text-[var(--background)] text-sm font-medium"
+                              >
+                                Modifier
+                              </button>
+                              {participantCount > 0 && (
+                                <Link
+                                  to={`/formations/${form.slug}/etudiants`}
+                                  className="px-4 py-3 rounded-xl border border-[var(--accent)] text-[var(--accent)] text-sm font-medium hover:bg-[var(--accent)]/10"
                                 >
-                                    <Power className="w-4 h-4" />
-                                    <span>{form.is_active !== false ? 'Désactiver' : 'Réactiver'}</span>
-                                </button>
-                                <button
-                                    onClick={() => openFormationEditor(form)}
-                                    className="px-4 py-3 rounded-xl bg-[var(--foreground)] text-[var(--background)] text-sm font-medium"
-                                >
-                                    Modifier
-                                </button>
-                                <button
-                                    type="button"
-                                    disabled={deletingFormationId === form.id}
-                                    onClick={() => deleteFormation(form.id)}
-                                    className="px-4 py-3 rounded-xl border border-red-500 bg-red-500/10 text-red-700 hover:bg-red-500/20 text-sm font-medium"
-                                >
-                                    {deletingFormationId === form.id ? 'Suppression...' : 'Supprimer'}
-                                </button>
+                                  Voir étudiants formés
+                                </Link>
+                              )}
+                              <button
+                                type="button"
+                                disabled={deletingFormationId === form.id}
+                                onClick={() => deleteFormation(form.id)}
+                                className="px-4 py-3 rounded-xl border border-red-500 bg-red-500/10 text-red-700 hover:bg-red-500/20 text-sm font-medium"
+                              >
+                                {deletingFormationId === form.id ? 'Suppression...' : 'Supprimer'}
+                              </button>
                             </div>
-                        </div>
-                    ))}
+                          </div>
+                        );
+                      })}
                     </div>
                 </div>
             </div>
@@ -765,9 +959,12 @@ export function AdminDashboard() {
                             className="px-4 py-2.5 rounded-xl bg-[var(--background)] border border-[var(--border)] outline-none text-sm font-medium"
                         >
                             <option value="all">Tous les statuts</option>
-                            <option value="registered">Inscrit (Acompte)</option>
-                            <option value="fully_paid">Soldé complet</option>
+                            <option value="validated">Inscrit (Acompte)</option>
+                            <option value="validated">Inscription seule</option>
+                            <option value="participating">Inscription + participation</option>
+                            <option value="participating">Soldé complet</option>
                             <option value="pending">En attente</option>
+                            <option value="cancelled">Annulé</option>
                         </select>
                         <div className="relative w-full sm:w-64">
                             <input type="text" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} placeholder="Rechercher par nom, tél..." className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-[var(--background)] border border-[var(--border)] focus:outline-none focus:border-blue-600 text-sm"/>
@@ -781,10 +978,12 @@ export function AdminDashboard() {
                         <thead className="bg-[var(--background)] text-xs uppercase opacity-70 tracking-wider">
                             <tr>
                                 <th className="px-6 py-4 font-semibold">Candidat</th>
+                                <th className="px-6 py-4 font-semibold">ID Étudiant</th>
                                 <th className="px-6 py-4 font-semibold">Contact</th>
+                                <th className="px-6 py-4 font-semibold">Formation</th>
                                 <th className="px-6 py-4 font-semibold">Statut</th>
-                                <th className="px-6 py-4 font-semibold">Action</th>
-                        <th className="px-6 py-4 font-semibold text-right">Solde Restant</th>
+                                <th className="px-6 py-4 font-semibold">Actions</th>
+                                <th className="px-6 py-4 font-semibold text-right">Solde Restant</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-[var(--border)]">
@@ -796,28 +995,86 @@ export function AdminDashboard() {
                                 return (
                                 <tr key={ins.id} className="hover:bg-[var(--foreground)]/5 transition-colors">
                                     <td className="px-6 py-4 font-medium">{ins.full_name}</td>
+                                    <td className="px-6 py-4 font-mono opacity-80">{ins.profile?.student_id || ins.user_id || '—'}</td>
                                     <td className="px-6 py-4 font-mono opacity-80">{ins.phone}</td>
+                                    <td className="px-6 py-4 font-medium text-sm">{ins.formation?.title || 'N/A'}</td>
                                     <td className="px-6 py-4">
                                         <span className={`px-3 py-1 rounded-full text-[10px] uppercase tracking-wider font-bold ${
-                                            ins.status === 'fully_paid' ? 'bg-green-500/10 text-green-700 dark:text-green-400 border border-green-500/20' :
-                                            ins.status === 'registered' ? 'bg-blue-500/10 text-blue-700 dark:text-blue-400 border border-blue-500/20' :
-                                            ins.status === 'pending' ? 'bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 border border-yellow-500/20' :
-                                            'bg-slate-500/10 text-slate-700 dark:text-slate-400 border border-slate-500/20'
+                                          ins.status === 'participating' ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-500/20' :
+                                          ins.status === 'validated' ? 'bg-blue-500/10 text-blue-700 dark:text-blue-400 border border-blue-500/20' :
+                                          ins.status === 'cancelled' ? 'bg-red-500/10 text-red-700 dark:text-red-400 border border-red-500/20' :
+                                          ins.status === 'pending' ? 'bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 border border-yellow-500/20' :
+                                          'bg-slate-500/10 text-slate-700 dark:text-slate-400 border border-slate-500/20'
                                         }`}>
-                                            {ins.status === 'fully_paid' ? 'Soldé' : ins.status === 'registered' ? 'Inscrit' : ins.status === 'pending' ? 'En attente' : ins.status}
+                                          {ins.status === 'participating' ? 'Inscription + participation' : ins.status === 'validated' ? 'Inscription seule' : ins.status === 'cancelled' ? 'Annulé' : ins.status === 'pending' ? 'En attente' : ins.status}
                                         </span>
                                     </td>
-                                    <td className="px-6 py-4">
-                                        {(ins.payment_status === 'pending' || ins.status === 'pending') ? (
-                                            <button
-                                                onClick={() => validatePayment(ins.id)}
-                                                disabled={validationLoading === ins.id}
-                                                className="rounded-full bg-blue-600 px-3 py-2 text-white text-xs font-semibold hover:bg-blue-700 transition-colors disabled:opacity-50"
-                                            >
-                                                {validationLoading === ins.id ? 'Validation...' : 'Valider paiement'}
-                                            </button>
-                                        ) : (
-                                            <span className="text-xs opacity-60">Aucune action</span>
+                                    <td className="px-6 py-4 relative">
+                                        <button
+                                            type="button"
+                                            onClick={() => setOpenActionMenuId(openActionMenuId === ins.id ? null : ins.id)}
+                                            className="inline-flex items-center gap-2 rounded-full border border-[var(--border)] bg-[var(--background)] px-3 py-2 text-xs font-semibold text-[var(--foreground)] hover:bg-[var(--foreground)]/5 transition"
+                                        >
+                                            Actions
+                                            <ChevronDown className="w-3.5 h-3.5" />
+                                        </button>
+
+                                        {openActionMenuId === ins.id && (
+                                            <div className="hidden sm:block absolute z-20 mt-2 w-64 rounded-2xl border border-[var(--border)] bg-[var(--card)] shadow-xl py-2">
+                                                <button
+                                                    type="button"
+                                                    disabled={actionLoadingId === ins.id}
+                                                    onClick={() => runEnrollmentAction('participation', ins.id)}
+                                                    className="w-full px-4 py-3 text-left text-xs font-medium text-[var(--foreground)] hover:bg-[var(--foreground)]/5 disabled:opacity-50"
+                                                >
+                                                    <CircleCheck className="w-3.5 h-3.5 inline-block mr-2" />
+                                                    Valider Inscription & Participation
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    disabled={actionLoadingId === ins.id}
+                                                    onClick={() => runEnrollmentAction('inscription_only', ins.id)}
+                                                    className="w-full px-4 py-3 text-left text-xs font-medium text-[var(--foreground)] hover:bg-[var(--foreground)]/5 disabled:opacity-50"
+                                                >
+                                                    <CircleCheck className="w-3.5 h-3.5 inline-block mr-2" />
+                                                    Valider Inscription seule
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    disabled={actionLoadingId === ins.id}
+                                                    onClick={() => runEnrollmentAction('cancel', ins.id)}
+                                                    className="w-full px-4 py-3 text-left text-xs font-medium text-[var(--foreground)] hover:bg-[var(--foreground)]/5 disabled:opacity-50"
+                                                >
+                                                    <XCircle className="w-3.5 h-3.5 inline-block mr-2" />
+                                                    Annuler
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    disabled={actionLoadingId === ins.id}
+                                                    onClick={() => window.open(`https://wa.me/${ins.phone.replace(/\D/g, '')}`, '_blank')}
+                                                    className="w-full px-4 py-3 text-left text-xs font-medium text-[var(--foreground)] hover:bg-[var(--foreground)]/5 disabled:opacity-50"
+                                                >
+                                                    Contacter sur WhatsApp
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    disabled={actionLoadingId === ins.id}
+                                                    onClick={() => runEnrollmentAction('delete', ins.id)}
+                                                    className="w-full px-4 py-3 text-left text-xs font-semibold text-red-600 hover:bg-red-500/10 disabled:opacity-50"
+                                                >
+                                                    Supprimer
+                                                </button>
+                                                {ins.user_id ? (
+                                                    <button
+                                                        type="button"
+                                                        disabled={actionLoadingId === ins.id}
+                                                        onClick={() => runEnrollmentAction('attest', ins.id, ins.user_id)}
+                                                        className="w-full px-4 py-3 text-left text-xs font-medium text-[var(--foreground)] hover:bg-[var(--foreground)]/5 disabled:opacity-50"
+                                                    >
+                                                        Attester l'étudiant
+                                                    </button>
+                                                ) : null}
+                                            </div>
                                         )}
                                     </td>
                                     <td className="px-6 py-4 text-right">
@@ -831,11 +1088,85 @@ export function AdminDashboard() {
                             )})}
                             {filteredInscriptions.length === 0 && (
                                 <tr>
-                                    <td colSpan={4} className="px-6 py-16 text-center opacity-50 font-medium">Aucun élève trouvé.</td>
+                                    <td colSpan={6} className="px-6 py-16 text-center opacity-50 font-medium">Aucun élève trouvé.</td>
                                 </tr>
                             )}
                         </tbody>
                     </table>
+                    {activeActionEnrollment && (
+                        <div className="fixed inset-0 z-40 flex items-end justify-center bg-black/40 p-4 sm:hidden" onClick={() => setOpenActionMenuId(null)}>
+                            <div className="w-full max-w-xl overflow-hidden rounded-3xl border border-[var(--border)] bg-[var(--card)] shadow-2xl" onClick={(e) => e.stopPropagation()}>
+                                <div className="flex items-center justify-between border-b border-[var(--border)] px-5 py-4">
+                                    <div>
+                                        <p className="text-sm font-semibold">Actions pour {activeActionEnrollment.full_name}</p>
+                                        <p className="text-xs opacity-70">{activeActionEnrollment.formation?.title || 'Aucune formation'}</p>
+                                    </div>
+                                    <button
+                                        type="button"
+                                        onClick={() => setOpenActionMenuId(null)}
+                                        className="rounded-full px-3 py-2 text-xs font-medium text-[var(--foreground)] hover:bg-[var(--foreground)]/10"
+                                    >
+                                        Fermer
+                                    </button>
+                                </div>
+                                <div className="space-y-1 px-4 py-4">
+                                    <button
+                                        type="button"
+                                        disabled={actionLoadingId === activeActionEnrollment.id}
+                                        onClick={() => runEnrollmentAction('participation', activeActionEnrollment.id)}
+                                        className="w-full rounded-2xl px-4 py-3 text-left text-sm font-medium text-[var(--foreground)] hover:bg-[var(--foreground)]/5 disabled:opacity-50"
+                                    >
+                                        <CircleCheck className="w-4 h-4 inline-block mr-2" />
+                                        Valider Inscription & Participation
+                                    </button>
+                                    <button
+                                        type="button"
+                                        disabled={actionLoadingId === activeActionEnrollment.id}
+                                        onClick={() => runEnrollmentAction('inscription_only', activeActionEnrollment.id)}
+                                        className="w-full rounded-2xl px-4 py-3 text-left text-sm font-medium text-[var(--foreground)] hover:bg-[var(--foreground)]/5 disabled:opacity-50"
+                                    >
+                                        <CircleCheck className="w-4 h-4 inline-block mr-2" />
+                                        Valider Inscription seule
+                                    </button>
+                                    <button
+                                        type="button"
+                                        disabled={actionLoadingId === activeActionEnrollment.id}
+                                        onClick={() => runEnrollmentAction('cancel', activeActionEnrollment.id)}
+                                        className="w-full rounded-2xl px-4 py-3 text-left text-sm font-medium text-[var(--foreground)] hover:bg-[var(--foreground)]/5 disabled:opacity-50"
+                                    >
+                                        <XCircle className="w-4 h-4 inline-block mr-2" />
+                                        Annuler
+                                    </button>
+                                    <button
+                                        type="button"
+                                        disabled={actionLoadingId === activeActionEnrollment.id}
+                                        onClick={() => window.open(`https://wa.me/${activeActionEnrollment.phone.replace(/\D/g, '')}`, '_blank')}
+                                        className="w-full rounded-2xl px-4 py-3 text-left text-sm font-medium text-[var(--foreground)] hover:bg-[var(--foreground)]/5 disabled:opacity-50"
+                                    >
+                                        Contacter sur WhatsApp
+                                    </button>
+                                    <button
+                                        type="button"
+                                        disabled={actionLoadingId === activeActionEnrollment.id}
+                                        onClick={() => runEnrollmentAction('delete', activeActionEnrollment.id)}
+                                        className="w-full rounded-2xl px-4 py-3 text-left text-sm font-semibold text-red-600 hover:bg-red-500/10 disabled:opacity-50"
+                                    >
+                                        Supprimer
+                                    </button>
+                                    {activeActionEnrollment.user_id ? (
+                                        <button
+                                            type="button"
+                                            disabled={actionLoadingId === activeActionEnrollment.id}
+                                            onClick={() => runEnrollmentAction('attest', activeActionEnrollment.id, activeActionEnrollment.user_id)}
+                                            className="w-full rounded-2xl px-4 py-3 text-left text-sm font-medium text-[var(--foreground)] hover:bg-[var(--foreground)]/5 disabled:opacity-50"
+                                        >
+                                            Attester l'étudiant
+                                        </button>
+                                    ) : null}
+                                </div>
+                            </div>
+                        </div>
+                    )}
                 </div>
             </div>
         </TabsContent>
@@ -891,6 +1222,23 @@ export function AdminDashboard() {
                             {formLoading ? <Loader2 className="w-4 h-4 animate-spin"/> : "Créer le certificat brouillon"}
                         </button>
                     </form>
+
+                    <div className="mt-6 rounded-2xl border border-[var(--border)] bg-[var(--background)] p-4">
+                      <h4 className="font-semibold mb-2">Ajouter un lien de certificat à une inscription</h4>
+                      <div className="grid grid-cols-1 gap-3">
+                        <select value={certInscriptionId} onChange={e => setCertInscriptionId(e.target.value)} className="w-full px-4 py-3 rounded-xl bg-[var(--background)] border border-[var(--border)] outline-none text-sm">
+                          <option value="">Sélectionner une inscription</option>
+                          {inscriptions.map(ins => (
+                            <option key={ins.id} value={ins.id}>{ins.full_name} · {formations.find(f => f.id === ins.formation_id)?.title || 'Formation inconnue'}</option>
+                          ))}
+                        </select>
+                        <input type="url" placeholder="https://.../certificat.pdf" value={certLink} onChange={e => setCertLink(e.target.value)} className="w-full px-4 py-3 rounded-xl bg-[var(--background)] border border-[var(--border)] outline-none text-sm" />
+                        <div className="flex gap-2">
+                          <button onClick={addCertificateLink} className="px-4 py-3 rounded-xl bg-[var(--foreground)] text-[var(--background)] font-medium">Enregistrer le lien</button>
+                          <button onClick={() => { setCertLink(''); setCertInscriptionId(''); }} className="px-4 py-3 rounded-xl border border-[var(--border)]">Annuler</button>
+                        </div>
+                      </div>
+                    </div>
 
                     <div className="mt-8 pt-8 border-t border-[var(--border)]">
                         <h3 className="font-bold text-sm uppercase tracking-wider opacity-70 mb-4">Gestion des Certificats</h3>

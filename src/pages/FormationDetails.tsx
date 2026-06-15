@@ -4,7 +4,7 @@ import { motion } from 'motion/react';
 import { supabase } from '../lib/supabase';
 import { Formation } from '../types';
 import { SEO } from '../components/SEO';
-import { Loader2, Users, CreditCard, ShieldCheck, ArrowLeft, Share2, Check, Calendar } from 'lucide-react';
+import { Loader2, Users, ShieldCheck, ArrowLeft, Share2, Check, Calendar, MessageCircle } from 'lucide-react';
 import { isFormationActive } from '../lib/formationStatus';
 
 export function FormationDetails() {
@@ -15,13 +15,13 @@ export function FormationDetails() {
   const [loading, setLoading] = useState(true);
   const [copied, setCopied] = useState(false);
   const [formationUnavailable, setFormationUnavailable] = useState(false);
+  const [hasGraduates, setHasGraduates] = useState(false);
+  const [graduatesCount, setGraduatesCount] = useState(0);
   
   // Form state
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
-  const [paymentTiming, setPaymentTiming] = useState<'now' | 'later'>('now');
-  const [paymentMethod, setPaymentMethod] = useState<'chariow' | 'cash'>('chariow');
   const [submitting, setSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
 
@@ -41,19 +41,30 @@ export function FormationDetails() {
       }
 
       if (fData) {
+        setFormation(fData);
+        const { count: studentsCount, error: studentCountError } = await supabase
+          .from('inscriptions')
+          .select('id', { count: 'exact', head: true })
+          .eq('formation_id', fData.id)
+          .eq('status', 'participating');
+
+        if (!studentCountError) {
+          setGraduatesCount(studentsCount || 0);
+          setHasGraduates(Boolean(studentsCount && studentsCount > 0));
+        }
+
         if (!isFormationActive(fData)) {
-          setFormation(fData);
           setFormationUnavailable(true);
           setLoading(false);
           return;
         }
-        setFormation(fData);
+
         // Load remaining places
         const { count } = await supabase
           .from('inscriptions')
           .select('*', { count: 'exact', head: true })
           .eq('formation_id', fData.id)
-          .in('status', ['paid_online', 'registered', 'fully_paid']);
+          .in('status', ['validated', 'participating']);
           
         setRemainingPlaces(fData.places_max - (count || 0));
       }
@@ -71,13 +82,11 @@ export function FormationDetails() {
     setErrorMsg('');
     
     try {
-        // --- NORMALISATION DU NUMÉRO POUR TON BOT WHATSAPP ---
-        // On nettoie les espaces, les tirets et le symbole "+"
+        // Normalize phone number
         let cleanPhone = phone.trim().replace(/[\s\-\+]/g, '');
         
-        // Si l'utilisateur saisit 9 chiffres commençant par 6 (ex: 699999999)
         if (cleanPhone.startsWith('6') && cleanPhone.length === 9) {
-            cleanPhone = '237' + cleanPhone; // On ajoute l'identifiant pays requis par les API WhatsApp
+            cleanPhone = '237' + cleanPhone;
         }
         
         if (cleanPhone.length < 9) {
@@ -87,35 +96,28 @@ export function FormationDetails() {
         const { data: { session } } = await supabase.auth.getSession();
         const userId = session?.user?.id || null;
 
-        const payload = {
-            formation_id: formation.id,
-            full_name: fullName,
-            email,
-            phone: cleanPhone,
-            payment_status: 'pending',
-            payment_method: paymentMethod,
-            payment_timing: paymentTiming,
-            status: 'pending',
-            amount_paid: 0,
-            reminder_count: 0,
-            user_id: userId,
-        };
+        // Call enroll server action
+        const response = await fetch('/api/public/enroll', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                formation_id: formation.id,
+                full_name: fullName,
+                email,
+                phone: cleanPhone,
+                user_id: userId,
+            }),
+        });
 
-        const { data: insData, error: insError } = await supabase
-            .from('inscriptions')
-            .insert(payload)
-            .select('id')
-            .single();
-
-        if (insError) throw new Error(insError.message || "Erreur lors de l'inscription");
-
-        if (paymentTiming === 'now' && paymentMethod === 'chariow') {
-            const chariowUrl = `https://checkout.chariow.cm/pay?amount=${formation.price}&order_id=${insData.id}&return_url=${encodeURIComponent(window.location.origin + '/dashboard')}`;
-            window.location.href = chariowUrl;
-            return;
+        const data = await response.json();
+        if (!response.ok) {
+            throw new Error(data.error || 'Erreur lors de l\'inscription.');
         }
 
-        navigate('/dashboard');
+        // Redirect to WhatsApp
+        window.location.href = data.whatsapp_url;
         
     } catch (err: any) {
         setErrorMsg(err.message || "Une erreur est survenue.");
@@ -160,6 +162,14 @@ export function FormationDetails() {
       <div className="min-h-[70vh] flex flex-col items-center justify-center gap-4 text-center px-4">
         <p className="text-xl font-semibold">Cette formation n’est plus active pour le moment.</p>
         <p className="opacity-70">Vérifiez le catalogue pour voir les sessions actuellement ouvertes.</p>
+        {hasGraduates && (
+          <Link
+            to={`/formations/${slug}/etudiants`}
+            className="inline-flex items-center justify-center rounded-2xl bg-[var(--foreground)] px-5 py-3 text-sm font-semibold text-[var(--background)] hover:opacity-90"
+          >
+            Voir les {graduatesCount} étudiant{graduatesCount > 1 ? 's' : ''} formé{graduatesCount > 1 ? 's' : ''}
+          </Link>
+        )}
         <Link to="/formations" className="inline-flex items-center space-x-2 text-sm font-semibold bg-[var(--card)] border border-[var(--border)] px-4 py-2 rounded-xl text-[var(--accent)]">
           <ArrowLeft size={16} />
           <span>Retour au catalogue</span>
@@ -223,11 +233,16 @@ export function FormationDetails() {
                animate={{ opacity: 1, y: 0 }}
             >
               <h1 className="text-4xl md:text-5xl font-bold tracking-tighter mb-4 leading-tight">{formation.title}</h1>
-              
-              <div className="flex flex-wrap items-center gap-4 mb-8">
-                  <span className="bg-[var(--card)] px-4 py-1.5 rounded-full text-xs font-bold tracking-widest uppercase border border-[var(--border)] shadow-sm">
-                      {formation.category}
-                  </span>
+              {hasGraduates && (
+                <div className="mb-4 rounded-3xl border border-[var(--accent)] bg-[var(--accent)]/10 p-4 text-sm font-semibold text-[var(--accent)]">
+                  Cette formation a déjà formé {graduatesCount} étudiant{graduatesCount > 1 ? 's' : ''}.{' '}
+                  <Link to={`/formations/${slug}/etudiants`} className="underline">Voir la liste des diplômés</Link>
+                </div>
+              )}
+                <div className="flex flex-wrap items-center gap-4 mb-8">
+                <span className="bg-[var(--card)] px-4 py-1.5 rounded-full text-xs font-bold tracking-widest uppercase border border-[var(--border)] shadow-sm">
+                  {formation.category_id || 'N/C'}
+                </span>
                   <span className="flex items-center text-sm opacity-80 bg-[var(--card)] px-3 py-1.5 rounded-full border border-[var(--border)]">
                       <ShieldCheck className="w-4 h-4 mr-1.5 text-[var(--accent)]" /> Certifiant
                   </span>
@@ -309,46 +324,6 @@ export function FormationDetails() {
                             />
                         </div>
                         <div>
-                            <label className="block text-xs font-bold uppercase tracking-wider mb-1.5 opacity-70">Moment du paiement</label>
-                            <div className="grid gap-3 sm:grid-cols-2">
-                                <label className="flex items-center gap-3 rounded-2xl border border-[var(--border)] p-4 cursor-pointer">
-                                    <input type="radio" name="paymentTiming" value="now" checked={paymentTiming === 'now'} onChange={() => setPaymentTiming('now')} className="accent-blue-600" />
-                                    <div>
-                                      <p className="font-semibold">Payer maintenant</p>
-                                      <p className="text-xs opacity-70">Accès en ligne immédiat</p>
-                                    </div>
-                                </label>
-                                <label className="flex items-center gap-3 rounded-2xl border border-[var(--border)] p-4 cursor-pointer">
-                                    <input type="radio" name="paymentTiming" value="later" checked={paymentTiming === 'later'} onChange={() => setPaymentTiming('later')} className="accent-blue-600" />
-                                    <div>
-                                      <p className="font-semibold">Payer plus tard</p>
-                                      <p className="text-xs opacity-70">Réserver votre place, paiement différé</p>
-                                    </div>
-                                </label>
-                            </div>
-                        </div>
-
-                        <div>
-                            <label className="block text-xs font-bold uppercase tracking-wider mb-1.5 opacity-70">Moyen de paiement</label>
-                            <div className="grid gap-3 sm:grid-cols-2">
-                                <label className="flex items-center gap-3 rounded-2xl border border-[var(--border)] p-4 cursor-pointer">
-                                    <input type="radio" name="paymentMethod" value="chariow" checked={paymentMethod === 'chariow'} onChange={() => setPaymentMethod('chariow')} className="accent-blue-600" />
-                                    <div>
-                                      <p className="font-semibold">En ligne via Chariow</p>
-                                      <p className="text-xs opacity-70">Paiement instantané sécurisé</p>
-                                    </div>
-                                </label>
-                                <label className="flex items-center gap-3 rounded-2xl border border-[var(--border)] p-4 cursor-pointer">
-                                    <input type="radio" name="paymentMethod" value="cash" checked={paymentMethod === 'cash'} onChange={() => setPaymentMethod('cash')} className="accent-blue-600" />
-                                    <div>
-                                      <p className="font-semibold">Espèces</p>
-                                      <p className="text-xs opacity-70">Paiement manuel à l'administration</p>
-                                    </div>
-                                </label>
-                            </div>
-                        </div>
-
-                        <div>
                             <label className="block text-xs font-bold uppercase tracking-wider mb-1.5 opacity-70">Numéro WhatsApp</label>
                             <input 
                                 type="tel" 
@@ -369,13 +344,13 @@ export function FormationDetails() {
                         >
                             {submitting ? <Loader2 className="w-5 h-5 animate-spin" /> : (
                                 <>
-                                    <CreditCard className="w-5 h-5" />
-                                    <span>{paymentMethod === 'cash' || paymentTiming === 'later' ? "Finaliser l'inscription" : "Payer via Chariow"}</span>
+                                    <MessageCircle className="w-5 h-5" />
+                                    <span>S'inscrire via WhatsApp</span>
                                 </>
                             )}
                         </button>
                         <p className="text-[11px] text-center opacity-60 mt-4 leading-normal">
-                            Votre inscription est enregistrée en base de données. Si vous choisissez le paiement différé ou en espèces, l'administration validera votre dossier manuellement.
+                            En cliquant sur le bouton, vous serez redirigé vers WhatsApp pour confirmer votre inscription auprès de l'administration.
                         </p>
                     </form>
                 )}
@@ -385,3 +360,4 @@ export function FormationDetails() {
     </div>
   );
 }
+

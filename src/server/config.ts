@@ -22,3 +22,4 @@ export const serverConfig = {
 
 export const getPublicSiteUrl = (fallbackUrl?: string) =>
   serverConfig.siteUrl || fallbackUrl || `http://localhost:${serverConfig.port}`;
+

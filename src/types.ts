@@ -13,8 +13,11 @@ export type Formation = {
   price: number;
   registration_fee?: number;
   places_max: number;
+  // Schema has explicit student counters instead of a "places_disponibles" column
+  max_students?: number;
+  current_students?: number;
   image_url: string;
-  category: string;
+  // category_id is the canonical foreign key to the categories table
   category_id?: string;
   start_date?: string;
   end_date?: string;
@@ -36,7 +39,11 @@ export type Inscription = {
   last_reminder_at: string | null;
   created_at: string;
   user_id?: string | null;
-  status?: string;
+  status?:
+    | 'pending'
+    | 'validated'
+    | 'participating'
+    | 'cancelled';
 };
 
 export type Profile = {
@@ -44,6 +51,20 @@ export type Profile = {
   email?: string;
   is_admin: boolean;
   created_at?: string;
+  student_id?: string | null;
+  is_attested?: boolean;
+  full_name?: string;
+  photo_url?: string;
+  bio?: string;
+  portfolio_url?: string;
+  social_links?: string | Record<string, string> | null;
+  allow_seo_indexing?: boolean;
+  phone?: string;
+};
+
+export type Enrollment = Inscription & {
+  formation?: Formation;
+  profile?: Profile;
 };
 
 export type PlatformSettings = {

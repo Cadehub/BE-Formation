@@ -12,10 +12,17 @@ export default defineConfig({
     tailwindcss(),
     VitePWA({
       registerType: 'autoUpdate',
+      devOptions: {
+        enabled: true,
+      },
+      includeAssets: ['icon.svg'],
       manifest: {
         name: 'C&B Services Formations',
         short_name: 'C&B',
         description: 'SaaS éducatif ultra-premium, immersif et intuitif.',
+        start_url: '/',
+        display: 'standalone',
+        background_color: '#0a0a0a',
         theme_color: '#0a0a0a',
         icons: [
           {
@@ -45,5 +52,6 @@ export default defineConfig({
   server: {
       hmr: process.env.DISABLE_HMR !== 'true',
       watch: process.env.DISABLE_HMR === 'true' ? null : {},
+      allowedHosts: ['flagstone-radiated-jailer.ngrok-free.dev']
   },
 });
