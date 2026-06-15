@@ -24,7 +24,7 @@ export function Navbar() {
       try {
         const [{ count: studentsCount }, { count: blogCount }] = await Promise.all([
           supabase.from('profiles').select('id', { count: 'exact', head: true }).eq('is_attested', true),
-          supabase.from('blogs').select('id', { count: 'exact', head: true }).eq('is_published', true),
+          supabase.from('blogs').select('id', { count: 'exact', head: true }).not('published_at', 'is', null),
         ]);
 
         setHasStudents(Boolean(studentsCount && studentsCount > 0));

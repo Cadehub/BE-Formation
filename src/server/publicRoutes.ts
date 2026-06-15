@@ -179,7 +179,7 @@ router.get("/menu", async (_req: Request, res: Response) => {
       supabaseAdmin
         .from("blogs")
         .select("id", { count: "exact", head: true })
-        .eq("is_published", true),
+        .not("published_at", "is", null),
     ]);
 
     const hasStudents = Boolean(attestedRes.count && attestedRes.count > 0);
