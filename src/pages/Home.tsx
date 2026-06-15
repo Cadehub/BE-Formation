@@ -113,7 +113,7 @@ export function Home() {
             className="lg:col-span-4 hidden lg:flex h-[600px] relative"
           >
              <div className="absolute inset-0 bg-gradient-to-tr from-[var(--border)] to-transparent rounded-3xl rotate-3 bg-[var(--card)] border border-[var(--border)] backdrop-blur-3xl overflow-hidden flex items-center justify-center">
-                 <div className="absolute inset-0 opacity-[0.03] mix-blend-overlay bg-[url('https://grainy-gradients.vercel.app/noise.svg')]"></div>
+                 <div className="absolute inset-0 opacity-[0.03] mix-blend-overlay bg-[url('/noise.svg')]"></div>
                  <div className="w-48 h-48 rounded-full border border-[var(--foreground)]/20 absolute -top-10 -right-10"></div>
                  <div className="w-64 h-64 rounded-full border border-[var(--foreground)]/10 absolute -bottom-20 -left-20"></div>
                  <Layers strokeWidth={0.5} className="w-48 h-48 text-[var(--foreground)]/20 drop-shadow-2xl" />

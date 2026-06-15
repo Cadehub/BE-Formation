@@ -37,41 +37,48 @@ export function StudentDashboard() {
 
       setUserId(session.user.id);
       const token = session.access_token;
-      const response = await fetch('/api/public/student/dashboard', {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
+      // Use Supabase client directly instead of the server endpoint
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.user) {
+        navigate('/student/login', { replace: true });
+        return;
+      }
 
-      if (!response.ok) {
-        const payload = await response.json().catch(() => ({}));
-        const message = payload?.error || 'Impossible de charger votre espace étudiant.';
-        if (response.status === 401) {
-          navigate('/student/login', { replace: true });
-          return;
-        }
-        setDashboardError(message);
+      setUserId(session.user.id);
+
+      const [{ data: profileData, error: profileError }, { data: enrollmentData, error: enrollmentsError }] = await Promise.all([
+        supabase.from('profiles').select('*').eq('id', session.user.id).maybeSingle(),
+        supabase.from('inscriptions').select('*, formations(*)').eq('user_id', session.user.id).order('created_at', { ascending: false }),
+      ]);
+
+      if (profileError) {
+        setDashboardError(profileError.message || 'Impossible de charger le profil.');
         setLoading(false);
         return;
       }
 
-      const payload = await response.json();
-      if (payload.profile?.is_admin) {
+      if (enrollmentsError) {
+        setDashboardError(enrollmentsError.message || 'Impossible de charger les inscriptions.');
+        setLoading(false);
+        return;
+      }
+
+      if (profileData?.is_admin) {
         navigate('/admin', { replace: true });
         return;
       }
 
-      const enrollmentData = Array.isArray(payload.enrollments) ? payload.enrollments : [];
-      setProfile(payload.profile || null);
+      const enrollList = Array.isArray(enrollmentData) ? enrollmentData : [];
+      setProfile(profileData || null);
 
-      if (enrollmentData.length === 0) {
+      if (enrollList.length === 0) {
         setEnrollments([]);
         setLoading(false);
         return;
       }
 
-      setEnrollments(enrollmentData as Enrollment[]);
-      setSelectedEnrollmentId(enrollmentData[0].id);
+      setEnrollments(enrollList as Enrollment[]);
+      setSelectedEnrollmentId(enrollList[0].id);
 
       const firstEnrollmentId = enrollmentData[0].id;
       const { data: certificateData } = await supabase
@@ -102,20 +109,19 @@ export function StudentDashboard() {
     setReviewSuccess(false);
 
     try {
-      const response = await fetch('/api/public/reviews', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+      const { data: reviewData, error: reviewError } = await supabase
+        .from('formation_reviews')
+        .insert({
           user_id: userId,
           formation_id: selectedEnrollment.formation_id,
           rating,
           comment: reviewComment,
-        }),
-      });
+        })
+        .select('*')
+        .single();
 
-      const payload = await response.json();
-      if (!response.ok) {
-        throw new Error(payload.error || 'Erreur serveur');
+      if (reviewError) {
+        throw new Error(reviewError.message || 'Erreur serveur');
       }
 
       setReviewSuccess(true);

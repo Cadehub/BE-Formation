@@ -21,16 +21,10 @@ export function Payer() {
     setError('');
     
     try {
-      // In a real scenario, this would query a backend API to safely fetch user records.
-      // E.g. fetch(`/api/public/inscriptions?phone=${phone}`)
-      const response = await fetch(`/api/public/inscriptions?phone=${encodeURIComponent(phone)}`);
-      const data = await response.json();
-      
-      if (!response.ok) {
-          throw new Error(data.error || "Erreur lors de la recherche");
-      }
-      
-      setInscriptions(data.inscriptions || []);
+      const cleanPhone = phone.trim();
+      const { data: inscriptionsData, error } = await fetchInscriptionByPhone(cleanPhone);
+      if (error) throw error;
+      setInscriptions(inscriptionsData || []);
       setSearched(true);
     } catch (err: any) {
       setError(err.message || "Erreur réseau.");
@@ -38,6 +32,19 @@ export function Payer() {
       setLoading(false);
     }
   };
+
+  async function fetchInscriptionByPhone(phoneNumber: string) {
+    try {
+      const { data, error } = await (await import('../lib/supabase')).supabase
+        .from('inscriptions')
+        .select('*, formations(title,price,registration_fee)')
+        .eq('phone', phoneNumber)
+        .neq('status', 'participating');
+      return { data, error };
+    } catch (err: any) {
+      return { data: null, error: err };
+    }
+  }
 
   return (
     <div className="min-h-[80vh] flex flex-col items-center justify-center p-4">

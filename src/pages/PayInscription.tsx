@@ -14,17 +14,16 @@ export function PayInscription() {
   useEffect(() => {
     async function fetchRecord() {
       try {
-        const response = await fetch(`/api/public/inscriptions/${id}`);
-        const result = await response.json();
-        
-        if (!response.ok) {
-            throw new Error(result.error || "Dossier introuvable.");
-        }
-        
-        setData({
-            inscription: result.inscription,
-            formation: result.inscription.formations
-        });
+                const supabase = (await import('../lib/supabase')).supabase;
+                const { data: inscription, error } = await supabase.from('inscriptions').select('*, formations(*)').eq('id', id).single();
+                if (error || !inscription) {
+                        throw new Error(error?.message || "Dossier introuvable.");
+                }
+
+                setData({
+                        inscription: inscription as Inscription,
+                        formation: (inscription as any).formations as Formation,
+                });
       } catch (err: any) {
         setError(err.message || "Erreur réseau.");
       } finally {

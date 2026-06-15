@@ -60,10 +60,8 @@ export function StudentProfile() {
   useEffect(() => {
     async function fetchSettings() {
       try {
-        const response = await fetch('/api/public/settings');
-        if (!response.ok) return;
-        const data = await response.json();
-        if (data?.whatsapp_number) {
+        const { data, error } = await supabase.from('platform_settings').select('whatsapp_number').eq('id', 1).maybeSingle();
+        if (!error && data?.whatsapp_number) {
           setPlatformWhatsApp(data.whatsapp_number);
         }
       } catch (err) {

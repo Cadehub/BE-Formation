@@ -96,28 +96,58 @@ export function FormationDetails() {
         const { data: { session } } = await supabase.auth.getSession();
         const userId = session?.user?.id || null;
 
-        // Call enroll server action
-        const response = await fetch('/api/public/enroll', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-                formation_id: formation.id,
-                full_name: fullName,
-                email,
-                phone: cleanPhone,
-                user_id: userId,
-            }),
-        });
+        // Ensure student_id exists for authenticated user (client-side best-effort)
+        const generateStudentId = () => `BEF-2026-${Math.random().toString(36).substring(2,6).toUpperCase()}`;
+        let studentId = null;
 
-        const data = await response.json();
-        if (!response.ok) {
-            throw new Error(data.error || 'Erreur lors de l\'inscription.');
+        try {
+          if (userId) {
+            const { data: profile, error: profileError } = await supabase.from('profiles').select('id,student_id,email').eq('id', userId).maybeSingle();
+            if (!profileError && profile) {
+              if (profile.student_id) {
+                studentId = profile.student_id;
+              } else {
+                studentId = generateStudentId();
+                await supabase.from('profiles').update({ student_id: studentId }).eq('id', userId);
+              }
+            } else if (!profile) {
+              studentId = generateStudentId();
+              await supabase.from('profiles').insert([{ id: userId, email: email || null, student_id: studentId }]);
+            }
+          } else {
+            studentId = generateStudentId();
+          }
+        } catch (err) {
+          // ignore profile write errors and continue
+          console.warn('Profile student_id sync failed', err);
         }
 
-        // Redirect to WhatsApp
-        window.location.href = data.whatsapp_url;
+        // Insert enrollment directly into Supabase
+        const { data: enrollment, error: enrollError } = await supabase.from('inscriptions').insert({
+          formation_id: formation.id,
+          full_name: fullName,
+          email,
+          phone: cleanPhone,
+          status: 'pending',
+          payment_status: 'pending',
+          payment_method: 'cash',
+          payment_timing: 'later',
+          user_id: userId || null,
+          amount_paid: 0,
+          reminder_count: 0,
+        }).select('id').single();
+
+        if (enrollError || !enrollment) {
+          throw new Error(enrollError?.message || 'Erreur lors de l\'inscription.');
+        }
+
+        // Get WhatsApp number from platform_settings
+        const { data: settings, error: settingsError } = await supabase.from('platform_settings').select('whatsapp_number').eq('id', 1).maybeSingle();
+        const adminPhone = settings?.whatsapp_number || '';
+        const whatsappMessage = `Bonjour, je souhaite m'inscrire à la formation ${formation.title}. Voici mes informations :\nNom: ${fullName}\nEmail: ${email}\nTéléphone: ${cleanPhone}\nID Étudiant: ${studentId}`;
+        const whatsappUrl = `https://wa.me/${(adminPhone || '').replace(/\D/g, '')}?text=${encodeURIComponent(whatsappMessage)}`;
+
+        window.location.href = whatsappUrl;
         
     } catch (err: any) {
         setErrorMsg(err.message || "Une erreur est survenue.");
