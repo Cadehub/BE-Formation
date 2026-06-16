@@ -77,98 +77,24 @@ export function FormationDetails() {
   const handleEnroll = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formation) return;
-    
+
     setSubmitting(true);
     setErrorMsg('');
-    
+
     try {
-        // Normalize phone number
-        let cleanPhone = phone.trim().replace(/[\s\-\+]/g, '');
-        
-        if (cleanPhone.startsWith('6') && cleanPhone.length === 9) {
-            cleanPhone = '237' + cleanPhone;
-        }
-        
-        if (cleanPhone.length < 9) {
-            throw new Error("Le numéro de téléphone entré est incomplet.");
-        }
+      const { data: { session } } = await supabase.auth.getSession();
 
-        const { data: { session } } = await supabase.auth.getSession();
-        const userId = session?.user?.id || null;
-
-        // Ensure student_id exists for authenticated user (client-side best-effort)
-        const generateStudentId = () => `BEF-2026-${Math.random().toString(36).substring(2,6).toUpperCase()}`;
-        let studentId = null;
-
-        try {
-          if (userId) {
-            const { data: profile, error: profileError } = await supabase.from('profiles').select('id,student_id,email').eq('id', userId).maybeSingle();
-            if (!profileError && profile) {
-              if (profile.student_id) {
-                studentId = profile.student_id;
-              } else {
-                studentId = generateStudentId();
-                await supabase.from('profiles').update({ student_id: studentId }).eq('id', userId);
-              }
-            } else if (!profile) {
-              studentId = generateStudentId();
-              await supabase.from('profiles').insert([{ id: userId, email: email || null, student_id: studentId }]);
-            }
-          } else {
-            studentId = generateStudentId();
-          }
-        } catch (err) {
-          // ignore profile write errors and continue
-          console.warn('Profile student_id sync failed', err);
-        }
-
-        // Insert enrollment directly into Supabase
-        // Important: This should work with anonymous users (user_id can be null)
-        // Make sure Supabase RLS allows this
-        const { data: enrollment, error: enrollError } = await supabase.from('inscriptions').insert({
-          formation_id: formation.id,
-          full_name: fullName,
-          email,
-          phone: cleanPhone,
-          status: 'pending',
-          payment_status: 'pending',
-          payment_method: 'cash',
-          payment_timing: 'later',
-          user_id: userId || null,
-          amount_paid: 0,
-          reminder_count: 0,
-        }).select('id').single();
-
-        if (enrollError || !enrollment) {
-          const errorMessage = enrollError?.message || 'Erreur lors de l\'inscription.';
-          
-          // Check for specific error types
-          if (errorMessage.includes('401') || errorMessage.includes('Unauthorized')) {
-            throw new Error(
-              "Impossible de traiter votre inscription. Veuillez verifier que tous vos informations sont correctes et réessayez. Si le problème persiste, contactez le support."
-            );
-          }
-          throw new Error(errorMessage);
-        }
-
-        // Get WhatsApp number from platform_settings
-        const { data: settings, error: settingsError } = await supabase.from('platform_settings').select('whatsapp_number').eq('id', 1).maybeSingle();
-        const adminPhone = settings?.whatsapp_number || '';
-        const whatsappMessage = `Bonjour, je souhaite m'inscrire à la formation ${formation.title}. Voici mes informations :\nNom: ${fullName}\nEmail: ${email}\nTéléphone: ${cleanPhone}\nID Étudiant: ${studentId}`;
-        const whatsappUrl = `https://wa.me/${(adminPhone || '').replace(/\D/g, '')}?text=${encodeURIComponent(whatsappMessage)}`;
-
-        window.location.href = whatsappUrl;
-        
+      if (session) {
+        setErrorMsg(
+          "Vous êtes connecté. Votre inscription est gérée automatiquement après confirmation de votre e-mail. Vérifiez votre boîte de réception pour le lien de validation."
+        );
+      } else {
+        navigate('/student/login');
+      }
     } catch (err: any) {
-        // Better error messaging
-        let displayError = err.message || "Une erreur est survenue.";
-        
-        if (displayError.includes('timeout') || displayError.includes('504')) {
-            displayError = "⏱️ Délai d'attente dépassé. Veuillez réessayer ou contactez le support.";
-        }
-        
-        setErrorMsg(displayError);
-        setSubmitting(false);
+      setErrorMsg(err.message || 'Une erreur est survenue. Veuillez réessayer.');
+    } finally {
+      setSubmitting(false);
     }
   };
 
