@@ -7,10 +7,16 @@ import { Lock, Loader2, ArrowRight } from 'lucide-react';
 
 export function StudentLogin() {
   const [email, setEmail] = useState('');
+  const [fullName, setFullName] = useState('');
+  const [phone, setPhone] = useState('');
+  const [age, setAge] = useState('');
+  const [paymentMethod, setPaymentMethod] = useState('');
+  const [formationId, setFormationId] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [mode, setMode] = useState<'login' | 'signup'>('login');
   const [successMessage, setSuccessMessage] = useState('');
+  const [isSuccess, setIsSuccess] = useState(false);
+  const [mode, setMode] = useState<'login' | 'signup'>('login');
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -34,9 +40,30 @@ export function StudentLogin() {
       return;
     }
 
+    if (mode === 'signup') {
+      if (!fullName.trim()) {
+        setError('Veuillez entrer votre nom complet.');
+        return;
+      }
+      if (!phone.trim()) {
+        setError('Veuillez entrer votre numéro de téléphone.');
+        return;
+      }
+      if (!formationId.trim()) {
+        setError('Veuillez indiquer l\'ID de la formation.');
+        return;
+      }
+      if (!age.trim() || Number.isNaN(Number(age))) {
+        setError('Veuillez entrer un âge valide.');
+        return;
+      }
+      if (!paymentMethod.trim()) {
+        setError('Veuillez indiquer le mode de paiement.');
+        return;
+      }
+    }
+
     setLoading(true);
-    const signupTimeoutMs = 30000; // 30s timeout
-    let timeoutId: ReturnType<typeof setTimeout> | null = null;
 
     try {
       const redirectTo = `${window.location.origin}/dashboard`;
@@ -47,20 +74,20 @@ export function StudentLogin() {
             ? crypto.randomUUID()
             : `${Math.random().toString(36).slice(2)}${Date.now().toString(36)}`;
 
-        // Create a timeout promise for signup
-        const signupPromise = supabase.auth.signUp({
+        const { data, error } = await supabase.auth.signUp({
           email,
           password: randomPassword,
           options: {
             emailRedirectTo: redirectTo,
+            data: {
+              formation_id: formationId,
+              full_name: fullName,
+              phone,
+              age: parseInt(age, 10),
+              payment_method: paymentMethod,
+            },
           },
         });
-
-        const timeoutPromise = new Promise((_, reject) =>
-          setTimeout(() => reject(new Error('TIMEOUT')), signupTimeoutMs)
-        );
-
-        const { data, error } = await Promise.race([signupPromise, timeoutPromise]) as any;
 
         if (error) {
           setError(error.message);
@@ -68,26 +95,20 @@ export function StudentLogin() {
         }
 
         if (data?.user?.id) {
-          try {
-            await supabase.from('profiles').upsert({
-              id: data.user.id,
-              email,
-              is_admin: false,
-            });
-          } catch (profileErr) {
-            console.warn('Profile creation delayed (will sync on confirmation):', profileErr);
-          }
+          setIsSuccess(true);
+          setSuccessMessage(
+            'Inscription réussie ! Un e-mail de confirmation vous a été envoyé. Veuillez cliquer sur le lien dans l\'e-mail pour activer votre compte et accéder à votre espace.'
+          );
+          setEmail('');
+          setFullName('');
+          setPhone('');
+          setAge('');
+          setPaymentMethod('');
+          setFormationId('');
+        } else {
+          setError('Impossible de créer le compte. Veuillez réessayer plus tard.');
         }
-
-        // Show confirmation email message instead of success message
-        setSuccessMessage(
-          "✓ Un email de confirmation vous a été envoyé. Veuillez cliquer sur le lien pour activer votre compte C&B Services et accéder à votre espace étudiant."
-        );
-        setMode('login');
-        // Reset form but don't redirect
-        setEmail('');
       } else {
-        // OTP/Magic link flow
         const { error } = await supabase.auth.signInWithOtp({
           email,
           options: {
@@ -106,23 +127,48 @@ export function StudentLogin() {
         setEmail('');
       }
     } catch (err: any) {
-      // Handle specific error cases
-      if (err.message === 'TIMEOUT') {
+      if (err.message?.includes('504') || err.message?.toLowerCase().includes('timeout')) {
         setError(
-          "⏱️ Le serveur met trop de temps à répondre. Ne vous inquiétez pas ! Vérifiez votre boîte email (y compris les spams). Si vous n'avez rien reçu dans 5 minutes, veuillez réessayer."
-        );
-      } else if (err.message?.includes('504') || err.message?.includes('timeout')) {
-        setError(
-          "⏱️ Le serveur est momentanément surchargé. Vérifiez votre email quand même et réessayez plus tard si nécessaire."
+          "Le serveur a mis trop de temps à répondre. Vérifiez quand même votre boîte email. Si rien n'arrive dans 5 minutes, réessayez."
         );
       } else {
         setError(err.message || 'Erreur inattendue. Veuillez réessayer.');
       }
     } finally {
       setLoading(false);
-      if (timeoutId) clearTimeout(timeoutId);
     }
   };
+
+  if (isSuccess) {
+    return (
+      <div className="min-h-[80vh] flex items-center justify-center p-4">
+        <SEO title="Confirmation d'email envoyée | Biteck Ethan" description="Vérifiez votre email pour activer votre compte étudiant." />
+        <motion.div
+          initial={{ opacity: 0, scale: 0.96 }}
+          animate={{ opacity: 1, scale: 1 }}
+          className="w-full max-w-md"
+        >
+          <div className="p-8 rounded-3xl bg-[var(--card)] border border-[var(--border)] shadow-2xl text-center">
+            <div className="mx-auto mb-6 w-16 h-16 rounded-full bg-green-500/10 text-green-600 flex items-center justify-center">
+              <Lock className="w-8 h-8" />
+            </div>
+            <h1 className="text-3xl font-bold tracking-tight mb-4">Inscription réussie !</h1>
+            <p className="text-sm opacity-80 mb-6">
+              Un e-mail de confirmation vous a été envoyé.
+              Veuillez cliquer sur le lien dans l'e-mail pour activer votre compte et accéder à votre espace.
+            </p>
+            <button
+              type="button"
+              onClick={() => setIsSuccess(false)}
+              className="inline-flex items-center justify-center rounded-2xl bg-[var(--foreground)] px-6 py-3 text-sm font-semibold text-[var(--background)] hover:opacity-90 transition-opacity"
+            >
+              Retour au formulaire
+            </button>
+          </div>
+        </motion.div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-[80vh] flex items-center justify-center p-4">
@@ -158,13 +204,73 @@ export function StudentLogin() {
                 placeholder="vous@exemple.com"
                 className="w-full px-4 py-3 rounded-2xl bg-[var(--background)] border border-[var(--border)] outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/10 text-sm"
               />
-              <p className="mt-2 text-xs opacity-70">
-                {mode === 'login'
-                  ? "Un lien magique sera envoyé à votre email pour vous connecter."
-                  : "Nous créerons un compte et vous enverrons un email de confirmation."
-                }
-              </p>
             </div>
+
+            {mode === 'signup' && (
+              <>
+                <div>
+                  <label className="text-xs font-bold uppercase tracking-widest opacity-70 mb-2 block">Nom complet</label>
+                  <input
+                    type="text"
+                    value={fullName}
+                    onChange={(e) => setFullName(e.target.value)}
+                    required
+                    placeholder="Jean Dupont"
+                    className="w-full px-4 py-3 rounded-2xl bg-[var(--background)] border border-[var(--border)] outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/10 text-sm"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-xs font-bold uppercase tracking-widest opacity-70 mb-2 block">Téléphone</label>
+                  <input
+                    type="tel"
+                    value={phone}
+                    onChange={(e) => setPhone(e.target.value)}
+                    required
+                    placeholder="+237 6 99 99 99 99"
+                    className="w-full px-4 py-3 rounded-2xl bg-[var(--background)] border border-[var(--border)] outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/10 text-sm"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-xs font-bold uppercase tracking-widest opacity-70 mb-2 block">Âge</label>
+                    <input
+                      type="number"
+                      value={age}
+                      onChange={(e) => setAge(e.target.value)}
+                      required
+                      placeholder="22"
+                      className="w-full px-4 py-3 rounded-2xl bg-[var(--background)] border border-[var(--border)] outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/10 text-sm"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs font-bold uppercase tracking-widest opacity-70 mb-2 block">Mode de paiement</label>
+                    <input
+                      type="text"
+                      value={paymentMethod}
+                      onChange={(e) => setPaymentMethod(e.target.value)}
+                      required
+                      placeholder="Carte / Espèces / Mobile money"
+                      className="w-full px-4 py-3 rounded-2xl bg-[var(--background)] border border-[var(--border)] outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/10 text-sm"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="text-xs font-bold uppercase tracking-widest opacity-70 mb-2 block">ID de la formation</label>
+                  <input
+                    type="text"
+                    value={formationId}
+                    onChange={(e) => setFormationId(e.target.value)}
+                    required
+                    placeholder="UUID de la formation"
+                    className="w-full px-4 py-3 rounded-2xl bg-[var(--background)] border border-[var(--border)] outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/10 text-sm"
+                  />
+                </div>
+              </>
+            )}
+
             <button
               type="submit"
               disabled={loading}
