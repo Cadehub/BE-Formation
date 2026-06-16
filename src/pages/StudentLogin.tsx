@@ -35,6 +35,9 @@ export function StudentLogin() {
     }
 
     setLoading(true);
+    const signupTimeoutMs = 30000; // 30s timeout
+    let timeoutId: ReturnType<typeof setTimeout> | null = null;
+
     try {
       const redirectTo = `${window.location.origin}/dashboard`;
 
@@ -44,7 +47,8 @@ export function StudentLogin() {
             ? crypto.randomUUID()
             : `${Math.random().toString(36).slice(2)}${Date.now().toString(36)}`;
 
-        const { data, error } = await supabase.auth.signUp({
+        // Create a timeout promise for signup
+        const signupPromise = supabase.auth.signUp({
           email,
           password: randomPassword,
           options: {
@@ -52,24 +56,38 @@ export function StudentLogin() {
           },
         });
 
+        const timeoutPromise = new Promise((_, reject) =>
+          setTimeout(() => reject(new Error('TIMEOUT')), signupTimeoutMs)
+        );
+
+        const { data, error } = await Promise.race([signupPromise, timeoutPromise]) as any;
+
         if (error) {
           setError(error.message);
           return;
         }
 
         if (data?.user?.id) {
-          await supabase.from('profiles').upsert({
-            id: data.user.id,
-            email,
-            is_admin: false,
-          });
+          try {
+            await supabase.from('profiles').upsert({
+              id: data.user.id,
+              email,
+              is_admin: false,
+            });
+          } catch (profileErr) {
+            console.warn('Profile creation delayed (will sync on confirmation):', profileErr);
+          }
         }
 
+        // Show confirmation email message instead of success message
         setSuccessMessage(
-          "Inscription réussie. Un email de connexion vous a été envoyé. Vérifiez votre boîte aux lettres."
+          "✓ Un email de confirmation vous a été envoyé. Veuillez cliquer sur le lien pour activer votre compte C&B Services et accéder à votre espace étudiant."
         );
         setMode('login');
+        // Reset form but don't redirect
+        setEmail('');
       } else {
+        // OTP/Magic link flow
         const { error } = await supabase.auth.signInWithOtp({
           email,
           options: {
@@ -85,11 +103,24 @@ export function StudentLogin() {
         setSuccessMessage(
           "Un lien magique a été envoyé à votre adresse email. Cliquez dessus pour accéder à votre espace étudiant."
         );
+        setEmail('');
       }
     } catch (err: any) {
-      setError(err.message || 'Erreur inattendue.');
+      // Handle specific error cases
+      if (err.message === 'TIMEOUT') {
+        setError(
+          "⏱️ Le serveur met trop de temps à répondre. Ne vous inquiétez pas ! Vérifiez votre boîte email (y compris les spams). Si vous n'avez rien reçu dans 5 minutes, veuillez réessayer."
+        );
+      } else if (err.message?.includes('504') || err.message?.includes('timeout')) {
+        setError(
+          "⏱️ Le serveur est momentanément surchargé. Vérifiez votre email quand même et réessayez plus tard si nécessaire."
+        );
+      } else {
+        setError(err.message || 'Erreur inattendue. Veuillez réessayer.');
+      }
     } finally {
       setLoading(false);
+      if (timeoutId) clearTimeout(timeoutId);
     }
   };
 

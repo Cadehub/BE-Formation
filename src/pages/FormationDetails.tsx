@@ -123,6 +123,8 @@ export function FormationDetails() {
         }
 
         // Insert enrollment directly into Supabase
+        // Important: This should work with anonymous users (user_id can be null)
+        // Make sure Supabase RLS allows this
         const { data: enrollment, error: enrollError } = await supabase.from('inscriptions').insert({
           formation_id: formation.id,
           full_name: fullName,
@@ -138,7 +140,15 @@ export function FormationDetails() {
         }).select('id').single();
 
         if (enrollError || !enrollment) {
-          throw new Error(enrollError?.message || 'Erreur lors de l\'inscription.');
+          const errorMessage = enrollError?.message || 'Erreur lors de l\'inscription.';
+          
+          // Check for specific error types
+          if (errorMessage.includes('401') || errorMessage.includes('Unauthorized')) {
+            throw new Error(
+              "Impossible de traiter votre inscription. Veuillez verifier que tous vos informations sont correctes et réessayez. Si le problème persiste, contactez le support."
+            );
+          }
+          throw new Error(errorMessage);
         }
 
         // Get WhatsApp number from platform_settings
@@ -150,7 +160,14 @@ export function FormationDetails() {
         window.location.href = whatsappUrl;
         
     } catch (err: any) {
-        setErrorMsg(err.message || "Une erreur est survenue.");
+        // Better error messaging
+        let displayError = err.message || "Une erreur est survenue.";
+        
+        if (displayError.includes('timeout') || displayError.includes('504')) {
+            displayError = "⏱️ Délai d'attente dépassé. Veuillez réessayer ou contactez le support.";
+        }
+        
+        setErrorMsg(displayError);
         setSubmitting(false);
     }
   };
