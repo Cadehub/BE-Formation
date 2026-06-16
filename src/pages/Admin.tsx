@@ -83,30 +83,22 @@ export function AdminDashboard() {
   const loadStats = async () => {
     setLoading(true);
 
-    const token = await getAdminToken();
-    if (!token) {
-      setLoading(false);
-      return;
-    }
-
     try {
-      const enrollRes = await fetch('/api/admin/enrollments', {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-      });
-      const enrollJson = await enrollRes.json();
-      if (enrollRes.ok && Array.isArray(enrollJson.enrollments)) {
+      const { data: enrollmentData, error: enrollmentError } = await supabase
+        .from('inscriptions')
+        .select('*, formations ( title ), profiles (*)')
+        .order('created_at', { ascending: false });
+
+      if (enrollmentError) {
+        console.error('Erreur chargement inscriptions admin:', enrollmentError.message);
+      } else if (Array.isArray(enrollmentData)) {
         setInscriptions(
-          enrollJson.enrollments.map((item: any) => ({
+          enrollmentData.map((item: any) => ({
             ...item,
             profile: Array.isArray(item.profiles) ? item.profiles[0] : item.profiles,
             formation: Array.isArray(item.formations) ? item.formations[0] : item.formations,
           }))
         );
-      } else {
-        console.error('Erreur chargement inscriptions admin:', enrollJson.error || enrollJson);
       }
     } catch (err: any) {
       console.error('Erreur chargement inscriptions admin:', err.message || err);
@@ -135,20 +127,17 @@ export function AdminDashboard() {
 
   const refreshEnrollments = async () => {
     setEnrollmentsLoading(true);
-    const token = await getAdminToken();
-    if (!token) {
-      setEnrollmentsLoading(false);
-      return;
-    }
-
     try {
-      const response = await fetch('/api/admin/enrollments', {
-        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-      });
-      const json = await response.json();
-      if (response.ok && Array.isArray(json.enrollments)) {
+      const { data: enrollmentData, error: enrollmentError } = await supabase
+        .from('inscriptions')
+        .select('*, formations ( title ), profiles (*)')
+        .order('created_at', { ascending: false });
+
+      if (enrollmentError) {
+        console.error('Erreur rechargement inscriptions:', enrollmentError.message);
+      } else if (Array.isArray(enrollmentData)) {
         setInscriptions(
-          json.enrollments.map((item: any) => ({
+          enrollmentData.map((item: any) => ({
             ...item,
             profile: Array.isArray(item.profiles) ? item.profiles[0] : item.profiles,
             formation: Array.isArray(item.formations) ? item.formations[0] : item.formations,

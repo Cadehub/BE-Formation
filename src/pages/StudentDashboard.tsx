@@ -126,10 +126,10 @@ export function StudentDashboard() {
     }
   };
 
-  const whatsappLink = formation?.whatsapp_url || '';
-  const adminPhone = import.meta.env.VITE_ADMIN_WHATSAPP || '';
-  const adminMessage = `Bonjour, je souhaite contacter l'administration au sujet de ma formation (${formation?.title || 'formation'}).`;
-  const contactAdminUrl = `https://wa.me/${adminPhone.replace(/\D/g, '')}?text=${encodeURIComponent(adminMessage)}`;
+  const adminPhone = import.meta.env.VITE_ADMIN_WHATSAPP || '237654016097';
+  const studentName = profile?.full_name || profile?.email || 'étudiant';
+  const contactAdminMessage = `Bonjour, je viens de finaliser la création de mon compte étudiant pour la formation. Mon nom est ${studentName}. Je vous contacte pour valider mon inscription.`;
+  const contactAdminUrl = `https://wa.me/${adminPhone.replace(/\D/g, '')}?text=${encodeURIComponent(contactAdminMessage)}`;
 
   if (loading) {
     return (
@@ -253,13 +253,23 @@ export function StudentDashboard() {
           </div>
 
           <div className="rounded-[2rem] border border-[var(--border)] bg-[var(--background)] p-8 shadow-sm">
-            <div className="flex items-center justify-between gap-4 mb-6">
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between mb-6">
               <div>
                 <p className="text-sm uppercase tracking-[0.25em] opacity-70">Laisser un avis</p>
                 <h2 className="text-2xl font-bold">Votre retour compte</h2>
               </div>
-              <div className="inline-flex items-center gap-2 rounded-full bg-blue-500/10 px-3 py-2 text-xs font-semibold text-blue-700">
-                <Star className="w-4 h-4" /> {rating}/5
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+                <a
+                  href={contactAdminUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center justify-center rounded-3xl bg-emerald-600 px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-emerald-500/20 transition hover:bg-emerald-500"
+                >
+                  Contacter l'administration
+                </a>
+                <div className="inline-flex items-center gap-2 rounded-full bg-blue-500/10 px-3 py-2 text-xs font-semibold text-blue-700">
+                  <Star className="w-4 h-4" /> {rating}/5
+                </div>
               </div>
             </div>
 
